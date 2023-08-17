@@ -22,12 +22,17 @@ import com.google.common.collect.ImmutableSet;
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Macro;
 import io.cdap.cdap.api.annotation.Name;
+import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.etl.api.FailureCollector;
-import io.cdap.plugin.common.ReferencePluginConfig;
+import io.cdap.plugin.common.ReferenceNames;
+
+import io.cdap.plugin.http.common.BaseHttpConfig;
+import io.cdap.plugin.http.common.http.MessageFormatType;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -37,10 +42,12 @@ import javax.ws.rs.HttpMethod;
 /**
  * Config class for {@link HTTPSink}.
  */
-public class HTTPSinkConfig extends ReferencePluginConfig {
+public class HTTPSinkConfig extends BaseHttpConfig {
   public static final String URL = "url";
   public static final String METHOD = "method";
   public static final String BATCH_SIZE = "batchSize";
+  public static final String WRITE_JSON_AS_ARRAY = "writeJsonAsArray";
+  public static final String JSON_BATCH_KEY = "jsonBatchKey";
   public static final String DELIMETER_FOR_MESSAGE = "delimiterForMessages";
   public static final String MESSAGE_FORMAT = "messageFormat";
   public static final String BODY = "body";
@@ -52,7 +59,6 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
   public static final String CONNECTION_TIMEOUT = "connectTimeout";
   public static final String READ_TIMEOUT = "readTimeout";
   public static final String FAIL_ON_NON_200_RESPONSE = "failOnNon200Response";
-
   private static final String KV_DELIMITER = ":";
   private static final String DELIMITER = "\n";
   private static final Set<String> METHODS = ImmutableSet.of(HttpMethod.GET, HttpMethod.POST,
@@ -72,6 +78,19 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
   @Description("Batch size. Defaults to 1. (Macro Enabled)")
   @Macro
   private final Integer batchSize;
+
+  @Name(WRITE_JSON_AS_ARRAY)
+  @Nullable
+  @Description("Whether to write json as array. Defaults to false. (Macro Enabled)")
+  @Macro
+  private final Boolean writeJsonAsArray;
+
+  @Name(JSON_BATCH_KEY)
+  @Nullable
+  @Description("Optional key to be used for wrapping json array as object. " +
+          "Leave empty for no wrapping of the array (Macro Enabled)")
+  @Macro
+  private final String jsonBatchKey;
 
   @Name(DELIMETER_FOR_MESSAGE)
   @Nullable
@@ -146,7 +165,9 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
                         @Nullable String delimiterForMessages, String messageFormat, @Nullable String body,
                         @Nullable String requestHeaders, String charset,
                         boolean followRedirects, boolean disableSSLValidation, @Nullable int numRetries,
-                        @Nullable int readTimeout, @Nullable int connectTimeout, boolean failOnNon200Response) {
+                        @Nullable int readTimeout, @Nullable int connectTimeout, boolean failOnNon200Response,
+                        String oauth2Enabled, String authType, @Nullable String jsonBatchKey,
+                        Boolean writeJsonAsArray) {
     super(referenceName);
     this.url = url;
     this.method = method;
@@ -162,6 +183,10 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     this.readTimeout = readTimeout;
     this.connectTimeout = connectTimeout;
     this.failOnNon200Response = failOnNon200Response;
+    this.jsonBatchKey = jsonBatchKey;
+    this.writeJsonAsArray = writeJsonAsArray;
+    this.oauth2Enabled = oauth2Enabled;
+    this.authType = authType;
   }
 
   private HTTPSinkConfig(Builder builder) {
@@ -180,6 +205,10 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     connectTimeout = builder.connectTimeout;
     readTimeout = builder.readTimeout;
     failOnNon200Response = builder.failOnNon200Response;
+    jsonBatchKey = builder.jsonBatchKey;
+    writeJsonAsArray = builder.writeJsonAsArray;
+    oauth2Enabled = builder.oauth2Enabled;
+    authType = builder.authType;
   }
 
   public static Builder newBuilder() {
@@ -193,7 +222,7 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     builder.method = copy.getMethod();
     builder.batchSize = copy.getBatchSize();
     builder.delimiterForMessages = copy.getDelimiterForMessages();
-    builder.messageFormat = copy.getMessageFormat();
+    builder.messageFormat = copy.getMessageFormat().getValue();
     builder.body = copy.getBody();
     builder.requestHeaders = copy.getRequestHeaders();
     builder.charset = copy.getCharset();
@@ -203,6 +232,8 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     builder.connectTimeout = copy.getConnectTimeout();
     builder.readTimeout = copy.getReadTimeout();
     builder.failOnNon200Response = copy.getFailOnNon200Response();
+    builder.oauth2Enabled = copy.getOAuth2Enabled();
+    builder.authType = copy.getAuthTypeString();
     return builder;
   }
 
@@ -218,13 +249,20 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     return batchSize;
   }
 
-  @Nullable
-  public String getDelimiterForMessages() {
-    return delimiterForMessages;
+  public boolean shouldWriteJsonAsArray() {
+    return writeJsonAsArray != null && writeJsonAsArray;
   }
 
-  public String getMessageFormat() {
-    return messageFormat;
+  public String getJsonBatchKey() {
+    return jsonBatchKey;
+  }
+
+  public String getDelimiterForMessages() {
+    return Strings.isNullOrEmpty(delimiterForMessages) ? "\n" : delimiterForMessages;
+  }
+
+  public MessageFormatType getMessageFormat() {
+    return MessageFormatType.valueOf(messageFormat.toUpperCase());
   }
 
   @Nullable
@@ -271,7 +309,17 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     return convertHeadersToMap(requestHeaders);
   }
 
+  public Map<String, String> getHeadersMap(String header) {
+    return convertHeadersToMap(header);
+  }
+
+  public String getReferenceNameOrNormalizedFQN() {
+    return Strings.isNullOrEmpty(referenceName) ? ReferenceNames.normalizeFqn(url) : referenceName;
+  }
+
   public void validate(FailureCollector collector) {
+    super.validate(collector);
+
     if (!containsMacro(URL)) {
       try {
         new URL(url);
@@ -299,6 +347,11 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
         .withConfigProperty(METHOD);
     }
 
+    if (!containsMacro(BATCH_SIZE) && batchSize != null && batchSize < 1) {
+         collector.addFailure("Batch size must be greater than 0.", null)
+                 .withConfigProperty(BATCH_SIZE);
+    }
+
     if (!containsMacro(NUM_RETRIES) && numRetries < 0) {
       collector.addFailure("Number of Retries cannot be a negative number.", null)
         .withConfigProperty(NUM_RETRIES);
@@ -313,6 +366,17 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
       && body == null) {
       collector.addFailure("For Custom message format, message cannot be null.", null)
         .withConfigProperty(MESSAGE_FORMAT);
+    }
+  }
+
+  public void validateSchema(@Nullable Schema schema, FailureCollector collector) {
+    if (schema == null) {
+      return;
+    }
+    List<Schema.Field> fields = schema.getFields();
+    if (fields == null || fields.isEmpty()) {
+      collector.addFailure("Schema must contain at least one field", null);
+      throw collector.getOrThrowException();
     }
   }
 
@@ -339,6 +403,8 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     private String url;
     private String method;
     private Integer batchSize;
+    private Boolean writeJsonAsArray;
+    private String jsonBatchKey;
     private String delimiterForMessages;
     private String messageFormat;
     private String body;
@@ -350,6 +416,8 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
     private Integer connectTimeout;
     private Integer readTimeout;
     private Boolean failOnNon200Response;
+    private String oauth2Enabled;
+    private String authType;
 
     private Builder() {
     }
@@ -371,6 +439,16 @@ public class HTTPSinkConfig extends ReferencePluginConfig {
 
     public Builder setBatchSize(Integer batchSize) {
       this.batchSize = batchSize;
+      return this;
+    }
+
+    public Builder setWriteJsonAsArray(Boolean writeJsonAsArray) {
+      this.writeJsonAsArray = writeJsonAsArray;
+      return this;
+    }
+
+    public Builder setJsonBatchKey(String jsonBatchKey) {
+      this.jsonBatchKey = jsonBatchKey;
       return this;
     }
 

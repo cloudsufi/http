@@ -16,6 +16,7 @@
 
 package io.cdap.plugin.http.sink.batch;
 
+import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.etl.api.validation.CauseAttributes;
 import io.cdap.cdap.etl.api.validation.ValidationException;
 import io.cdap.cdap.etl.api.validation.ValidationFailure;
@@ -47,8 +48,11 @@ public class HTTPSinkConfigTest {
     1,
     1,
     1,
-    true
-  );
+    true,
+          "false",
+          "none",
+          "results",
+          false);
 
   @Test
   public void testValidConfig() {
@@ -145,6 +149,50 @@ public class HTTPSinkConfigTest {
     config.validate(collector);
     collector.getOrThrowException();
   }
+
+  @Test()
+  public void testValidInputSchema() {
+    Schema schema = Schema.recordOf("record",
+                                    Schema.Field.of("id", Schema.of(Schema.Type.LONG)),
+                                    Schema.Field.of("name", Schema.of(Schema.Type.STRING)));
+    HTTPSinkConfig config = HTTPSinkConfig.newBuilder(VALID_CONFIG).build();
+    MockFailureCollector collector = new MockFailureCollector("httpsinkwithvalidinputschema");
+    config.validateSchema(schema, collector);
+    Assert.assertTrue(collector.getValidationFailures().isEmpty());
+  }
+
+    @Test(expected = ValidationException.class)
+    public void testHTTPSinkWithNegativeBatchSize() {
+      HTTPSinkConfig config = HTTPSinkConfig.newBuilder(VALID_CONFIG)
+        .setBatchSize(-1)
+        .build();
+
+      MockFailureCollector collector = new MockFailureCollector("httpsinkwithnegativebatchsize");
+      config.validate(collector);
+      collector.getOrThrowException();
+    }
+
+    @Test(expected = ValidationException.class)
+    public void testHTTPSinkWithZeroBatchSize() {
+      HTTPSinkConfig config = HTTPSinkConfig.newBuilder(VALID_CONFIG)
+        .setBatchSize(0)
+        .build();
+
+      MockFailureCollector collector = new MockFailureCollector("httpsinkwithzerobatchsize");
+      config.validate(collector);
+      collector.getOrThrowException();
+    }
+
+    @Test
+    public void testHTTPSinkWithPositiveBatchSize() {
+      HTTPSinkConfig config = HTTPSinkConfig.newBuilder(VALID_CONFIG)
+        .setBatchSize(42)
+        .build();
+
+      MockFailureCollector collector = new MockFailureCollector("httpsinkwithpositivebatchsize");
+      config.validate(collector);
+      Assert.assertTrue(collector.getValidationFailures().isEmpty());
+    }
 
   public static void assertPropertyValidationFailed(MockFailureCollector failureCollector, String paramName) {
     List<ValidationFailure> failureList = failureCollector.getValidationFailures();
