@@ -20,7 +20,6 @@ import com.google.auth.oauth2.AccessToken;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.format.StructuredRecordStringConverter;
-
 import io.cdap.plugin.http.common.http.OAuthUtil;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
@@ -40,7 +39,9 @@ import java.net.URLEncoder;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.StringTokenizer;
 import java.util.regex.Matcher;
@@ -62,17 +63,22 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
   private final HTTPSinkConfig config;
   private StringBuilder messages = new StringBuilder();
   private String contentType;
+  private String url;
+  private List<PlaceholderBean> placeHolderList;
 
   private AccessToken accessToken;
 
   HTTPRecordWriter(HTTPSinkConfig config) {
     this.config = config;
     this.accessToken = null;
+    url = config.getUrl();
+    placeHolderList = getPlaceholderListFromURL();
   }
 
   @Override
   public void write(StructuredRecord input, StructuredRecord unused) throws IOException {
     String message = null;
+    String configUrl = url;
     if (config.getMethod().equals("POST") || config.getMethod().equals("PUT")) {
       if (config.getMessageFormat().equals("JSON")) {
         message = StructuredRecordStringConverter.toJsonString(input);
@@ -86,9 +92,12 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
       }
       messages.append(message).append(config.getDelimiterForMessages());
     }
+    if (config.getMethod().equals("PUT") || config.getMethod().equals("DELETE") && !placeHolderList.isEmpty()) {
+      configUrl = updateURLWithPlaceholderValue(input);
+    }
     StringTokenizer tokens = new StringTokenizer(messages.toString().trim(), config.getDelimiterForMessages());
     if (config.getBatchSize() == 1 || tokens.countTokens() == config.getBatchSize()) {
-      executeHTTPService();
+      executeHTTPService(configUrl);
     }
   }
 
@@ -97,7 +106,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     // Process remaining messages after batch executions.
     if (!messages.toString().isEmpty()) {
       try {
-        executeHTTPService();
+        executeHTTPService(config.getUrl());
       } catch (Exception e) {
         throw new RuntimeException("Error while executing http request for remaining input messages " +
                                      "after the batch execution. " + e);
@@ -105,7 +114,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     }
   }
 
-  private void executeHTTPService() throws IOException {
+  private void executeHTTPService(String configURL) throws IOException {
     int responseCode;
     int retries = 0;
     IOException exception = null;
@@ -120,12 +129,12 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
 
       if (accessToken != null) {
         Header authorizationHeader = new BasicHeader("Authorization",
-                String.format("Bearer %s", accessToken.getTokenValue()));
+                                                     String.format("Bearer %s", accessToken.getTokenValue()));
         headers.putAll(config.getHeadersMap(String.valueOf(authorizationHeader)));
       }
 
       try {
-        URL url = new URL(config.getUrl());
+        URL url = new URL(configURL);
         conn = (HttpURLConnection) url.openConnection();
         if (conn instanceof HttpsURLConnection) {
           //Disable SSLv3
@@ -247,4 +256,38 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     };
     HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
   }
+
+  /**
+   * @return List of placeholders which should be replaced by actual value in the URL.
+   */
+  private List<PlaceholderBean> getPlaceholderListFromURL() {
+    List<PlaceholderBean> placeholderList = new ArrayList<>();
+    if (!(config.getMethod().equals("PUT") || config.getMethod().equals("DELETE"))) {
+      return placeholderList;
+    }
+    Pattern pattern = Pattern.compile(REGEX_HASHED_VAR);
+    Matcher matcher = pattern.matcher(url);
+    while (matcher.find()) {
+      placeholderList.add(new PlaceholderBean(url, matcher.group(1)));
+    }
+    return placeholderList; // Return blank list if no match found
+  }
+
+  private String updateURLWithPlaceholderValue(StructuredRecord inputRecord) {
+    try {
+      StringBuilder finalURLBuilder = new StringBuilder(url);
+      for (int i = placeHolderList.size() - 1; i >= 0; i--) {
+        PlaceholderBean key = placeHolderList.get(i);
+        String replacement = inputRecord.get(key.getPlaceHolderKey());
+        if (replacement != null) {
+          String encodedReplacement = URLEncoder.encode(replacement, config.getCharset());
+          finalURLBuilder.replace(key.getStartIndex(), key.getEndIndex(), encodedReplacement);
+        }
+      }
+      return finalURLBuilder.toString();
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalStateException("Error encoding URL with placeholder value. Reason: " + e.getMessage(), e);
+    }
+  }
+
 }
