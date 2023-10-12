@@ -17,7 +17,7 @@
 package io.cdap.plugin.http.sink.batch;
 
 import com.google.auth.oauth2.AccessToken;
-
+import com.google.common.base.Strings;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.plugin.http.common.http.OAuthUtil;
@@ -32,12 +32,15 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
+import java.net.Proxy;
 import java.net.URL;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
+import java.util.Base64;
 import java.util.Map;
 
 import javax.net.ssl.HostnameVerifier;
@@ -104,7 +107,24 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
 
       try {
         URL url = new URL(config.getUrl());
-        conn = (HttpURLConnection) url.openConnection();
+        if (!Strings.isNullOrEmpty(config.getProxyUrl())) {
+          URL proxyURL = new URL(config.getProxyUrl());
+          String proxyHost = proxyURL.getHost();
+          int proxyPort = proxyURL.getPort();
+          String proxyUser = config.getProxyUsername();
+          String proxyPassword = config.getProxyPassword();
+
+          Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
+          conn = (HttpURLConnection) url.openConnection(proxy);
+
+          if (proxyUser != null && proxyPassword != null) {
+            String auth = proxyUser + ":" + proxyPassword;
+            String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
+            conn.setRequestProperty("Proxy-Authorization", "Basic " + encodedAuth);
+          }
+        } else {
+          conn = (HttpURLConnection) url.openConnection();
+        }
         if (conn instanceof HttpsURLConnection) {
           //Disable SSLv3
           System.setProperty("https.protocols", "TLSv1,TLSv1.1,TLSv1.2");

@@ -26,7 +26,15 @@ import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
 import io.cdap.plugin.common.ReferencePluginConfig;
 import io.cdap.plugin.http.common.http.AuthType;
 import io.cdap.plugin.http.common.http.OAuthUtil;
+
+import org.spark_project.jetty.client.HttpClient;
+import org.spark_project.jetty.client.HttpProxy;
+import org.spark_project.jetty.client.ProxyConfiguration;
+import org.spark_project.jetty.util.ssl.SslContextFactory;
+
 import java.io.File;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Optional;
 import javax.annotation.Nullable;
 
@@ -67,6 +75,8 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
     public static final String PROPERTY_AUTO_DETECT_VALUE = "auto-detect";
 
     public static final String PROPERTY_SERVICE_ACCOUNT_SCOPE = "serviceAccountScope";
+
+    public final String REGEX_PROXY_URL = "^(?i)(https?)://.*$";
 
     @Name(PROPERTY_AUTH_TYPE)
     @Description("Type of authentication used to submit request. \n" +
@@ -333,6 +343,11 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
     }
 
     public void validate(FailureCollector failureCollector) {
+        if (!containsMacro(PROPERTY_PROXY_URL) && !Strings.isNullOrEmpty(getProxyUrl())) {
+            SslContextFactory sslContextFactory = new SslContextFactory();
+            HttpClient httpClient = new HttpClient(sslContextFactory);
+            setProxy(httpClient);
+        }
         // Validate OAuth2 properties
         if (!containsMacro(PROPERTY_OAUTH2_ENABLED) && this.getOauth2Enabled()) {
             String reasonOauth2 = "OAuth2 is enabled";
@@ -387,6 +402,22 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
                     assertIsSet(getPassword(), PROPERTY_PASSWORD, reasonBasicAuth);
                 }
                 break;
+        }
+    }
+
+    public void setProxy(HttpClient httpClient) {
+        if (!getProxyUrl().matches(REGEX_PROXY_URL)) {
+            throw new IllegalArgumentException(String.format("Proxy URL format is wrong: %s.", getProxyUrl()));
+        }
+
+        try {
+            URI proxyUrl = new URI(getProxyUrl());
+            ProxyConfiguration proxyConfig = httpClient.getProxyConfiguration();
+            HttpProxy proxy = new HttpProxy(proxyUrl.getHost(), proxyUrl.getPort());
+            proxyConfig.getProxies().add(proxy);
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException(String.format("Cannot set up proxy server call with " +
+              "given proxy server details. Error : %s", e.getMessage()), e);
         }
     }
 
