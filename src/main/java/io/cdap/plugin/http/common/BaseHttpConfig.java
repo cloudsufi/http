@@ -27,10 +27,10 @@ import io.cdap.plugin.common.ReferencePluginConfig;
 import io.cdap.plugin.http.common.http.AuthType;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 
-import org.spark_project.jetty.client.HttpClient;
-import org.spark_project.jetty.client.HttpProxy;
-import org.spark_project.jetty.client.ProxyConfiguration;
-import org.spark_project.jetty.util.ssl.SslContextFactory;
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.HttpProxy;
+import org.eclipse.jetty.client.ProxyConfiguration;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 
 import java.io.File;
 import java.net.URI;
@@ -76,7 +76,7 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
 
     public static final String PROPERTY_SERVICE_ACCOUNT_SCOPE = "serviceAccountScope";
 
-    public final String REGEX_PROXY_URL = "^(?i)(https?)://.*$";
+    public static final String REGEX_PROXY_URL = "^(?i)(https?)://.*$";
 
     @Name(PROPERTY_AUTH_TYPE)
     @Description("Type of authentication used to submit request. \n" +
