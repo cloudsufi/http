@@ -17,30 +17,34 @@
 package io.cdap.plugin.http.sink.batch;
 
 import com.google.auth.oauth2.AccessToken;
+import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.plugin.http.common.http.HttpClient;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.http.Header;
+import org.apache.http.HttpHost;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpEntityEnclosingRequestBase;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicHeader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
-import java.net.MalformedURLException;
-import java.net.ProtocolException;
-import java.net.Proxy;
+import java.net.URI;
 import java.net.URL;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
-import java.util.Base64;
 import java.util.Map;
 
 import javax.net.ssl.HostnameVerifier;
@@ -54,7 +58,6 @@ import javax.net.ssl.X509TrustManager;
  * RecordWriter for HTTP.
  */
 public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredRecord> {
-  private static final Logger LOG = LoggerFactory.getLogger(HTTPRecordWriter.class);
   private final HTTPSinkConfig config;
   private final MessageBuffer messageBuffer;
   private String contentType;
@@ -89,9 +92,10 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     int responseCode;
     int retries = 0;
     IOException exception = null;
+    CloseableHttpClient httpClient = HttpClients.createDefault();
     do {
       exception = null;
-      HttpURLConnection conn = null;
+      CloseableHttpResponse response = null;
 
       Map<String, String> headers = config.getRequestHeadersMap();
 
@@ -101,12 +105,22 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
 
       if (accessToken != null) {
         Header authorizationHeader = new BasicHeader("Authorization",
-                String.format("Bearer %s", accessToken.getTokenValue()));
+          String.format("Bearer %s", accessToken.getTokenValue()));
         headers.putAll(config.getHeadersMap(String.valueOf(authorizationHeader)));
       }
 
+      headers.put("Request-Method", config.getMethod().toUpperCase());
+      headers.put("Connect-Timeout", String.valueOf(config.getConnectTimeout()));
+      headers.put("Read-Timeout", String.valueOf(config.getReadTimeout()));
+      headers.put("Instance-Follow-Redirects", String.valueOf(config.getFollowRedirects()));
+      headers.put("charset", config.getCharset());
+
+
       try {
         URL url = new URL(config.getUrl());
+        HttpEntityEnclosingRequestBase request = new HttpClient.HttpRequest(URI.create(String.valueOf(url)),
+          config.getMethod());
+
         if (!Strings.isNullOrEmpty(config.getProxyUrl())) {
           URL proxyURL = new URL(config.getProxyUrl());
           String proxyHost = proxyURL.getHost();
@@ -114,58 +128,58 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
           String proxyUser = config.getProxyUsername();
           String proxyPassword = config.getProxyPassword();
 
-          Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
-          conn = (HttpURLConnection) url.openConnection(proxy);
+          CredentialsProvider credsProvider = new BasicCredentialsProvider();
+          credsProvider.setCredentials(
+            new AuthScope(proxyHost, proxyPort),
+            new UsernamePasswordCredentials(proxyUser, proxyPassword));
 
-          if (proxyUser != null && proxyPassword != null) {
-            String auth = proxyUser + ":" + proxyPassword;
-            String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
-            conn.setRequestProperty("Proxy-Authorization", "Basic " + encodedAuth);
-          }
-        } else {
-          conn = (HttpURLConnection) url.openConnection();
+          HttpHost proxy = new HttpHost(proxyHost, proxyPort);
+          httpClient = HttpClients.custom()
+            .setDefaultCredentialsProvider(credsProvider)
+            .setProxy(proxy)
+            .build();
         }
-        if (conn instanceof HttpsURLConnection) {
-          //Disable SSLv3
+
+        if (url.getProtocol().equalsIgnoreCase("https")) {
+          // Disable SSLv3
           System.setProperty("https.protocols", "TLSv1,TLSv1.1,TLSv1.2");
           if (config.getDisableSSLValidation()) {
             disableSSLValidation();
           }
         }
-        conn.setRequestMethod(config.getMethod().toUpperCase());
-        conn.setConnectTimeout(config.getConnectTimeout());
-        conn.setReadTimeout(config.getReadTimeout());
-        conn.setInstanceFollowRedirects(config.getFollowRedirects());
-        conn.addRequestProperty("charset", config.getCharset());
-        for (Map.Entry<String, String> propertyEntry : headers.entrySet()) {
-          conn.addRequestProperty(propertyEntry.getKey(), propertyEntry.getValue());
-        }
-        //Default contentType value would be added in the request properties if user has not added in the headers.
+
         if (config.getMethod().equals("POST") || config.getMethod().equals("PUT")) {
           if (!headers.containsKey("Content-Type")) {
-            conn.addRequestProperty("Content-Type", contentType);
+            headers.put("Content-Type", contentType);
           }
         }
+
         if (!messageBuffer.isEmpty()) {
-          conn.setDoOutput(true);
-          try (OutputStream outputStream = conn.getOutputStream()) {
-            outputStream.write(messageBuffer.getMessage().trim().getBytes(config.getCharset()));
+          String requestBodyString = messageBuffer.getMessage();
+          if (requestBodyString != null) {
+            StringEntity requestBody = new StringEntity(requestBodyString, Charsets.UTF_8.toString());
+            request.setEntity(requestBody);
           }
         }
-        responseCode = conn.getResponseCode();
+
+        for (Map.Entry<String, String> propertyEntry : headers.entrySet()) {
+          request.addHeader(propertyEntry.getKey(), propertyEntry.getValue());
+        }
+
+        response = httpClient.execute(request);
+
+        responseCode = response.getStatusLine().getStatusCode();
+
         messageBuffer.clear();
         if (config.getFailOnNon200Response() && !(responseCode >= 200 && responseCode < 300)) {
           exception = new IOException("Received error response. Response code: " + responseCode);
         }
         break;
-      } catch (MalformedURLException | ProtocolException e) {
-        throw new IllegalStateException("Error opening url connection. Reason: " + e.getMessage(), e);
       } catch (IOException e) {
-        LOG.warn("Error making {} request to url {} with headers {}.", config.getMethod(), config.getMethod(), headers);
-        exception = e;
+        exception = new IOException("An error occurred while executing the HTTP service: " + e.getMessage(), e);
       } finally {
-        if (conn != null) {
-          conn.disconnect();
+        if (response != null) {
+          response.close();
         }
       }
       retries++;
