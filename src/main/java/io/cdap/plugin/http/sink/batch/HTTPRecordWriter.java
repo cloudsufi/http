@@ -17,11 +17,14 @@
 package io.cdap.plugin.http.sink.batch;
 
 import com.google.auth.oauth2.AccessToken;
+import com.google.common.base.Charsets;
+import com.google.common.base.Strings;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.plugin.http.common.RetryPolicy;
 import io.cdap.plugin.http.common.error.HttpErrorHandler;
 import io.cdap.plugin.http.common.error.RetryableErrorHandling;
+import io.cdap.plugin.http.common.http.HttpClient;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
@@ -41,6 +44,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.ProtocolException;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.security.KeyManagementException;
@@ -102,7 +106,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     if (config.getMethod().equals("POST") || config.getMethod().equals("PUT")) {
       messageBuffer.add(input);
     }
-    
+
     if (config.getMethod().equals("PUT") || config.getMethod().equals("DELETE") && !placeHolderList.isEmpty()) {
       configURL = updateURLWithPlaceholderValue(input);
     }
@@ -262,5 +266,5 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     }
     messageBuffer.clear();
   }
-  
+
 }

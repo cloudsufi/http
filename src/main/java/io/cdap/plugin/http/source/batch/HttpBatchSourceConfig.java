@@ -16,19 +16,27 @@
 package io.cdap.plugin.http.source.batch;
 
 import com.google.auth.oauth2.AccessToken;
+import com.google.common.base.Strings;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.plugin.http.common.http.AuthType;
 import io.cdap.plugin.http.common.http.HttpClient;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 import io.cdap.plugin.http.source.common.BaseHttpSourceConfig;
 
+import org.apache.http.HttpHost;
+import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.conn.HttpHostConnectException;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 
 import java.io.IOException;
-
-
+import java.net.URL;
 
 /**
  * Provides all the configurations required for configuring the {@link HttpBatchSource} plugin.
@@ -59,16 +67,44 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
   private void validateOAuth2Credentials(FailureCollector collector) throws IOException {
     try (CloseableHttpClient client = HttpClients.createDefault()) {
       AccessToken accessToken = OAuthUtil.getAccessTokenByRefreshToken(client, this);
+      if (!containsMacro(PROPERTY_PROXY_URL) && !Strings.isNullOrEmpty(getProxyUrl())) {
+        URL proxyURL = new URL(proxyUrl);
+
+        CredentialsProvider credsProvider = new BasicCredentialsProvider();
+        credsProvider.setCredentials(
+          new AuthScope(proxyURL.getHost(), proxyURL.getPort()),
+          new UsernamePasswordCredentials(proxyUsername, proxyPassword));
+
+        HttpHost proxy = new HttpHost(proxyUrl, proxyURL.getPort());
+        CloseableHttpClient httpclient = HttpClients.custom()
+          .setDefaultCredentialsProvider(credsProvider)
+          .setProxy(proxy)
+          .build();
+
+        // Validating main URL with OAuth2
+        HttpGet request = new HttpGet(url);
+        request.addHeader("Authorization", "Bearer " + accessToken);
+        HttpResponse response = httpclient.execute(request);
+
+        // Validate the response
+        int statusCode = response.getStatusLine().getStatusCode();
+        if (statusCode != 200) {
+          collector.addFailure("Unable to validate the proxy", null);
+        }
+      }
     }
   }
 
   private void validateBasicAuthCredentials(FailureCollector collector) throws IOException {
-    HttpClient httpClient = new HttpClient(this);
-    CloseableHttpResponse response = httpClient.executeHTTP(getUrl());
-
-    if (response.getStatusLine().getStatusCode() != 200) {
-      collector.addFailure("Error encountered while configuring the stage: 'Unable to authenticate the given " +
-        "username and password'", null);
+    try {
+      HttpClient httpClient = new HttpClient(this);
+      CloseableHttpResponse response = httpClient.executeHTTP(getUrl());
+      if (response.getStatusLine().getStatusCode() != 200) {
+        collector.addFailure("Error encountered while configuring the stage: 'Unable to authenticate the given " +
+          "username and password'", "Please check the basic and proxy authentication");
+      }
+    } catch (HttpHostConnectException e) {
+      throw new IllegalStateException("Error executing HTTP request using this proxy URL: " + e.getMessage(), e);
     }
   }
 
@@ -142,7 +178,7 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
       this.oauth2Enabled = oauth2Enabled;
       return this;
     }
-    
+
     public HttpBatchSourceConfigBuilder setErrorHandling(String errorHandling) {
       this.errorHandling = errorHandling;
       return this;

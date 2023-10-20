@@ -27,14 +27,7 @@ import io.cdap.plugin.common.ReferencePluginConfig;
 import io.cdap.plugin.http.common.http.AuthType;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 
-import org.eclipse.jetty.client.HttpClient;
-import org.eclipse.jetty.client.HttpProxy;
-import org.eclipse.jetty.client.ProxyConfiguration;
-import org.eclipse.jetty.util.ssl.SslContextFactory;
-
 import java.io.File;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.Optional;
 import javax.annotation.Nullable;
 
@@ -344,9 +337,7 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
 
     public void validate(FailureCollector failureCollector) {
         if (!containsMacro(PROPERTY_PROXY_URL) && !Strings.isNullOrEmpty(getProxyUrl())) {
-            SslContextFactory sslContextFactory = new SslContextFactory();
-            HttpClient httpClient = new HttpClient(sslContextFactory);
-            setProxy(httpClient);
+            setProxy();
         }
         // Validate OAuth2 properties
         if (!containsMacro(PROPERTY_OAUTH2_ENABLED) && this.getOauth2Enabled()) {
@@ -405,19 +396,9 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
         }
     }
 
-    public void setProxy(HttpClient httpClient) {
+    public void setProxy() {
         if (!getProxyUrl().matches(REGEX_PROXY_URL)) {
             throw new IllegalArgumentException(String.format("Proxy URL format is wrong: %s.", getProxyUrl()));
-        }
-
-        try {
-            URI proxyUrl = new URI(getProxyUrl());
-            ProxyConfiguration proxyConfig = httpClient.getProxyConfiguration();
-            HttpProxy proxy = new HttpProxy(proxyUrl.getHost(), proxyUrl.getPort());
-            proxyConfig.getProxies().add(proxy);
-        } catch (URISyntaxException e) {
-            throw new IllegalArgumentException(String.format("Cannot set up proxy server call with " +
-              "given proxy server details. Error : %s", e.getMessage()), e);
         }
     }
 
