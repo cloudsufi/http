@@ -17,6 +17,7 @@ package io.cdap.plugin.http.source.batch;
 
 import com.google.auth.oauth2.AccessToken;
 import com.google.common.base.Strings;
+import com.google.gson.JsonSyntaxException;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.plugin.http.common.http.AuthType;
 import io.cdap.plugin.http.common.http.HttpClient;
@@ -92,6 +93,8 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
           collector.addFailure("Unable to validate the proxy", null);
         }
       }
+    } catch (JsonSyntaxException e) {
+      throw new IllegalStateException("Error executing the request using this token URL: ", e);
     }
   }
 
