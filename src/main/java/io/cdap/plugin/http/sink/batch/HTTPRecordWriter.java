@@ -184,7 +184,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     headers.put("charset", config.getCharset());
 
     try {
-      URL url = new URL(config.getUrl());
+      URL url = new URL(configURL);
       HttpEntityEnclosingRequestBase request = new HttpClient.HttpRequest(URI.create(String.valueOf(url)),
         config.getMethod());
 

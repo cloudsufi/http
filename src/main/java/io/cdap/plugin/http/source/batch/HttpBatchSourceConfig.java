@@ -24,20 +24,20 @@ import io.cdap.plugin.http.common.http.HttpClient;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 import io.cdap.plugin.http.source.common.BaseHttpSourceConfig;
 
+import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
 import org.apache.http.conn.HttpHostConnectException;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 
 import java.io.IOException;
-import java.net.URL;
 
 /**
  * Provides all the configurations required for configuring the {@link HttpBatchSource} plugin.
@@ -66,48 +66,41 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
   }
 
   private void validateOAuth2Credentials(FailureCollector collector) throws IOException {
-    try (CloseableHttpClient client = HttpClients.createDefault()) {
-      AccessToken accessToken = OAuthUtil.getAccessTokenByRefreshToken(client, this);
+    try {
+      HttpClientBuilder httpclientBuilder = HttpClients.custom();
       if (!containsMacro(PROPERTY_PROXY_URL) && !Strings.isNullOrEmpty(getProxyUrl())) {
-        URL proxyURL = new URL(proxyUrl);
-
-        CredentialsProvider credsProvider = new BasicCredentialsProvider();
-        credsProvider.setCredentials(
-          new AuthScope(proxyURL.getHost(), proxyURL.getPort()),
-          new UsernamePasswordCredentials(proxyUsername, proxyPassword));
-
-        HttpHost proxy = new HttpHost(proxyUrl, proxyURL.getPort());
-        CloseableHttpClient httpclient = HttpClients.custom()
-          .setDefaultCredentialsProvider(credsProvider)
-          .setProxy(proxy)
-          .build();
-
-        // Validating main URL with OAuth2
-        HttpGet request = new HttpGet(url);
-        request.addHeader("Authorization", "Bearer " + accessToken);
-        HttpResponse response = httpclient.execute(request);
-
-        // Validate the response
-        int statusCode = response.getStatusLine().getStatusCode();
-        if (statusCode != 200) {
-          collector.addFailure("Unable to validate the proxy", null);
+        HttpHost proxyHost = HttpHost.create(getProxyUrl());
+        if (!Strings.isNullOrEmpty(getProxyUsername()) && !Strings.isNullOrEmpty(getProxyPassword())
+          && !containsMacro(PROPERTY_PROXY_USERNAME) && !containsMacro(PROPERTY_PROXY_PASSWORD)) {
+          CredentialsProvider credsProvider = new BasicCredentialsProvider();
+          credsProvider.setCredentials(new AuthScope(proxyHost),
+            new UsernamePasswordCredentials(getProxyUsername(), getProxyPassword()));
+          httpclientBuilder.setDefaultCredentialsProvider(credsProvider);
         }
+        httpclientBuilder.setProxy(proxyHost);
       }
-    } catch (JsonSyntaxException e) {
-      throw new IllegalStateException("Error executing the request using this token URL: ", e);
+      CloseableHttpClient closeableHttpClient = httpclientBuilder.build();
+      AccessToken accessToken = OAuthUtil.getAccessTokenByRefreshToken(closeableHttpClient, this);
+    } catch (JsonSyntaxException | HttpHostConnectException e) {
+      throw new IllegalStateException("Error executing this request: " + e.getMessage(), e);
     }
   }
 
-  private void validateBasicAuthCredentials(FailureCollector collector) throws IOException {
+  public void validateBasicAuthCredentials(FailureCollector collector) throws IOException {
     try {
       HttpClient httpClient = new HttpClient(this);
       CloseableHttpResponse response = httpClient.executeHTTP(getUrl());
-      if (response.getStatusLine().getStatusCode() != 200) {
-        collector.addFailure("Error encountered while configuring the stage: 'Unable to authenticate the given " +
-          "username and password'", "Please check the basic and proxy authentication");
+      int statusCode = response.getStatusLine().getStatusCode();
+      if (statusCode != 200) {
+        HttpEntity entity = response.getEntity();
+        if (entity != null) {
+          String errorResponse = EntityUtils.toString(entity, "UTF-8");
+          String errorMessage = String.format("Request failed with status code: %d %s", statusCode, errorResponse);
+          collector.addFailure(errorMessage, null);
+        }
       }
     } catch (HttpHostConnectException e) {
-      throw new IllegalStateException("Error executing HTTP request using this proxy URL: " + e.getMessage(), e);
+      throw new IllegalStateException("Error executing HTTP request: " + e.getMessage(), e);
     }
   }
 
@@ -126,6 +119,16 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
     this.paginationType = builder.paginationType;
     this.verifyHttps = builder.verifyHttps;
     this.authType = builder.authType;
+    this.authUrl = builder.authUrl;
+    this.clientId = builder.clientId;
+    this.clientSecret = builder.clientSecret;
+    this.username = builder.username;
+    this.password = builder.password;
+    this.tokenUrl = builder.tokenUrl;
+    this.refreshToken = builder.refreshToken;
+    this.proxyUrl = builder.proxyUrl;
+    this.proxyUsername = builder.proxyUsername;
+    this.proxyPassword = builder.proxyPassword;
   }
 
   public static HttpBatchSourceConfigBuilder builder() {
@@ -151,9 +154,75 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
     private String paginationType;
     private String verifyHttps;
     private String authType;
+    public String authUrl;
+    public String tokenUrl;
+    public String clientId;
+    public String clientSecret;
+    public String scopes;
+    public String refreshToken;
+    public String proxyUrl;
+    public String proxyUsername;
+    public String proxyPassword;
+    public String username;
+    public String password;
+
 
     public HttpBatchSourceConfigBuilder setReferenceName (String referenceName) {
       this.referenceName = referenceName;
+      return this;
+    }
+    public HttpBatchSourceConfigBuilder setAuthUrl(String authUrl) {
+      this.authUrl = authUrl;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setTokenUrl(String tokenUrl) {
+      this.tokenUrl = tokenUrl;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setClientId(String clientId) {
+      this.clientId = clientId;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setClientSecret(String clientSecret) {
+      this.clientSecret = clientSecret;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setScopes(String scopes) {
+      this.scopes = scopes;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setRefreshToken(String refreshToken) {
+      this.refreshToken = refreshToken;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setProxyUrl(String proxyUrl) {
+      this.proxyUrl = proxyUrl;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setProxyUsername(String proxyUsername) {
+      this.proxyUsername = proxyUsername;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setProxyPassword(String proxyPassword) {
+      this.proxyPassword = proxyPassword;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setUsername(String username) {
+      this.username = username;
+      return this;
+    }
+
+    public HttpBatchSourceConfigBuilder setPassword(String password) {
+      this.password = password;
       return this;
     }
 
