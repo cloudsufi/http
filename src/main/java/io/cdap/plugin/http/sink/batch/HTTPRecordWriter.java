@@ -91,6 +91,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
   private final HttpErrorHandler httpErrorHandler;
   private final PollInterval pollInterval;
   private int httpStatusCode;
+  private static int retryCount;
 
   HTTPRecordWriter(HTTPSinkConfig config, Schema inputSchema) {
     this.config = config;
@@ -162,6 +163,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
   }
 
   private boolean executeHTTPServiceAndCheckStatusCode() throws IOException {
+    LOG.debug("HTTP Request Attempt No. : {}", ++retryCount);
     CloseableHttpClient httpClient = HttpClients.createDefault();
 
     CloseableHttpResponse response = null;
@@ -236,6 +238,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
       response = httpClient.execute(request);
 
       httpStatusCode = response.getStatusLine().getStatusCode();
+      LOG.debug("Response HTTP Status code: {}", httpStatusCode);
 
     } catch (MalformedURLException | ProtocolException e) {
       throw new IllegalStateException("Error opening url connection. Reason: " + e.getMessage(), e);
@@ -250,6 +253,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     boolean shouldRetry = errorHandlingStrategy.shouldRetry();
     if (!shouldRetry) {
       messageBuffer.clear();
+      retryCount = 0;
     }
     return !shouldRetry;
   }
@@ -289,7 +293,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
   }
 
   private void flushMessageBuffer() {
-    if (messageBuffer.isEmpty()) {
+    if (messageBuffer.isEmpty() && !config.getMethod().equals("DELETE")) {
       return;
     }
     contentType = messageBuffer.getContentType();
