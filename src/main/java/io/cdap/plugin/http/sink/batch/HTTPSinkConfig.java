@@ -25,17 +25,13 @@ import io.cdap.cdap.api.annotation.Name;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
-import io.cdap.plugin.common.ReferenceNames;
+
 
 import io.cdap.plugin.common.ReferencePluginConfig;
-import io.cdap.plugin.http.common.BaseHttpConfig;
-import io.cdap.plugin.http.common.EnumWithValue;
-import io.cdap.plugin.http.common.RetryPolicy;
-import io.cdap.plugin.http.common.error.ErrorHandling;
-import io.cdap.plugin.http.common.error.HttpErrorHandlerEntity;
-import io.cdap.plugin.http.common.error.RetryableErrorHandling;
-import io.cdap.plugin.http.common.http.MessageFormatType;
+import io.cdap.plugin.http.source.common.EnumWithValue;
 import io.cdap.plugin.http.source.common.error.ErrorHandling;
+import io.cdap.plugin.http.source.common.error.HttpErrorHandlerEntity;
+import io.cdap.plugin.http.source.common.error.RetryableErrorHandling;
 import io.cdap.plugin.http.source.common.http.MessageFormatType;
 
 import java.net.MalformedURLException;
