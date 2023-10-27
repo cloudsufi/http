@@ -146,22 +146,4 @@ public class HttpClient implements Closeable {
 
     return httpClientBuilder.build();
   }
-
-  /**
-   * This class allows us to send body not only in POST/PUT but also in other requests.
-   */
-  private static class HttpRequest extends HttpEntityEnclosingRequestBase {
-    private final String methodName;
-
-    HttpRequest(URI uri, String methodName) {
-      super();
-      this.setURI(uri);
-      this.methodName = methodName;
-    }
-
-    @Override
-    public String getMethod() {
-      return methodName;
-    }
-  }
 }

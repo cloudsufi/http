@@ -49,6 +49,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import javax.ws.rs.HttpMethod;
@@ -79,7 +80,7 @@ public class HTTPSinkConfig extends BaseHttpConfig {
   private static final String KV_DELIMITER = ":";
   private static final String DELIMITER = "\n";
   private static final String REGEX_HASHED_VAR = "#(\\w+)";
-  private static final String PLACEHOLDER_FORMAT = "#%s";
+  private static final String PLACEHOLDER = "#";
   private static final Set<String> METHODS = ImmutableSet.of(HttpMethod.GET, HttpMethod.POST,
                                                              HttpMethod.PUT, HttpMethod.DELETE);
 
@@ -164,12 +165,14 @@ public class HTTPSinkConfig extends BaseHttpConfig {
     "the first specified in mapping is matched.")
   protected String httpErrorsHandling;
 
+  @Nullable
   @Name(PROPERTY_ERROR_HANDLING)
   @Description("Error handling strategy to use when the HTTP response cannot be transformed to an output record.")
   protected String errorHandling;
 
+  @Nullable
   @Name(PROPERTY_RETRY_POLICY)
-  @Description("Policy used to calculate delay between retries.")
+  @Description("Policy used to calculate delay between retries. Default Retry Policy is Exponential.")
   protected String retryPolicy;
 
   @Nullable
@@ -177,9 +180,10 @@ public class HTTPSinkConfig extends BaseHttpConfig {
   @Description("Interval in seconds between retries. Is only used if retry policy is \"linear\".")
   @Macro
   protected Long linearRetryInterval;
-
+  
+  @Nullable
   @Name(PROPERTY_MAX_RETRY_DURATION)
-  @Description("Maximum time in seconds retries can take.")
+  @Description("Maximum time in seconds retries can take. Default value is 600 seconds (10 minute).")
   @Macro
   protected Long maxRetryDuration;
 
@@ -334,6 +338,9 @@ public class HTTPSinkConfig extends BaseHttpConfig {
   }
 
   public RetryPolicy getRetryPolicy() {
+    if (retryPolicy == null) {
+      return RetryPolicy.EXPONENTIAL;
+    }
     return getEnumValueByString(RetryPolicy.class, retryPolicy, PROPERTY_RETRY_POLICY);
   }
 
@@ -352,6 +359,9 @@ public class HTTPSinkConfig extends BaseHttpConfig {
   }
 
   public Long getMaxRetryDuration() {
+    if (maxRetryDuration == null) {
+      return 600L;
+    }
     return maxRetryDuration;
   }
 
@@ -465,6 +475,11 @@ public class HTTPSinkConfig extends BaseHttpConfig {
       collector.addFailure("For Custom message format, message cannot be null.", null)
         .withConfigProperty(MESSAGE_FORMAT);
     }
+
+    if (!containsMacro(PROPERTY_MAX_RETRY_DURATION) && Objects.nonNull(maxRetryDuration) && maxRetryDuration < 0) {
+      collector.addFailure("Max Retry Duration cannot be a negative number.", null)
+        .withConfigProperty(PROPERTY_MAX_RETRY_DURATION);
+    }
   }
 
   public void validateSchema(@Nullable Schema schema, FailureCollector collector) {
@@ -476,13 +491,19 @@ public class HTTPSinkConfig extends BaseHttpConfig {
       collector.addFailure("Schema must contain at least one field", null);
       throw collector.getOrThrowException();
     }
+
+    if (containsMacro(URL) || containsMacro(METHOD)) {
+      return;
+    }
     
-    if ((method.equals("PUT") || method.equals("DELETE")) && url.contains(PLACEHOLDER_FORMAT)) {
+    if ((method.equals("PUT") || method.equals("DELETE")) && url.contains(PLACEHOLDER)) {
       Pattern pattern = Pattern.compile(REGEX_HASHED_VAR);
       Matcher matcher = pattern.matcher(url);
+      List<String> fieldNames = fields.stream().map(field -> field.getName()).collect(Collectors.toList());
       while (matcher.find()) {
-        if (!fields.contains(matcher.group(1))) {
-          collector.addFailure("Schema must contain all fields mentioned in the url", null);
+        if (!fieldNames.contains(matcher.group(1))) {
+          collector.addFailure(String.format("Schema must contain '%s' field mentioned in the url", matcher.group(1)),
+                               null).withConfigProperty(URL);
         }
       }
     }
