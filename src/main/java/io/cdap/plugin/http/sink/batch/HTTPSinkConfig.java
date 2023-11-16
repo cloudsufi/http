@@ -27,8 +27,11 @@ import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
 
 
+import io.cdap.plugin.common.ReferenceNames;
 import io.cdap.plugin.common.ReferencePluginConfig;
+import io.cdap.plugin.http.common.BaseHttpConfig;
 import io.cdap.plugin.http.source.common.EnumWithValue;
+import io.cdap.plugin.http.source.common.RetryPolicy;
 import io.cdap.plugin.http.source.common.error.ErrorHandling;
 import io.cdap.plugin.http.source.common.error.HttpErrorHandlerEntity;
 import io.cdap.plugin.http.source.common.error.RetryableErrorHandling;
@@ -53,7 +56,7 @@ import javax.ws.rs.HttpMethod;
 /**
  * Config class for {@link HTTPSink}.
  */
-public class HTTPSinkConfig extends ReferencePluginConfig {
+public class HTTPSinkConfig extends BaseHttpConfig {
   public static final String URL = "url";
   public static final String METHOD = "method";
   public static final String BATCH_SIZE = "batchSize";
