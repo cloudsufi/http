@@ -21,11 +21,11 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
-import io.cdap.plugin.http.common.RetryPolicy;
-import io.cdap.plugin.http.common.error.HttpErrorHandler;
-import io.cdap.plugin.http.common.error.RetryableErrorHandling;
 import io.cdap.plugin.http.common.http.HttpRequest;
 import io.cdap.plugin.http.common.http.OAuthUtil;
+import io.cdap.plugin.http.source.common.RetryPolicy;
+import io.cdap.plugin.http.source.common.error.HttpErrorHandler;
+import io.cdap.plugin.http.source.common.error.RetryableErrorHandling;
 
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
