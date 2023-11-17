@@ -658,11 +658,11 @@
       ]
     },
     {
-      "name": "OAuth 2 disabled",
+      "name": "Authenticate with Basic Auth",
       "condition": {
-        "property": "oauth2Enabled",
+        "property": "authType",
         "operator": "equal to",
-        "value": "false"
+        "value": "basicAuth"
       },
       "show": [
         {
@@ -676,11 +676,11 @@
       ]
     },
     {
-      "name": "OAuth 2 enabled",
+      "name": "Authenticate with OAuth2",
       "condition": {
-        "property": "oauth2Enabled",
+        "property": "authType",
         "operator": "equal to",
-        "value": "true"
+        "value": "oAuth2"
       },
       "show": [
         {
@@ -706,6 +706,48 @@
         {
           "name": "refreshToken",
           "type": "property"
+        }
+      ]
+    },
+    {
+      "name": "Authenticate with service account",
+      "condition": {
+        "property": "authType",
+        "operator": "equal to",
+        "value": "serviceAccount"
+      },
+      "show": [
+        {
+          "name": "serviceAccountType",
+          "type": "property"
+        },
+        {
+          "name": "serviceAccountScope",
+          "type": "property"
+        }
+      ]
+    },
+    {
+      "name": "ServiceAuthenticationTypeFilePath",
+      "condition": {
+        "expression": "authType == 'serviceAccount' && serviceAccountType == 'filePath'"
+      },
+      "show": [
+        {
+          "type": "property",
+          "name": "serviceAccountFilePath"
+        }
+      ]
+    },
+    {
+      "name": "ServiceAuthenticationTypeJSON",
+      "condition": {
+        "expression": "authType == 'serviceAccount' && serviceAccountType == 'JSON'"
+      },
+      "show": [
+        {
+          "type": "property",
+          "name": "serviceAccountJSON"
         }
       ]
     },

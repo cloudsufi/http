@@ -19,7 +19,6 @@ import com.google.common.base.Strings;
 import com.google.gson.JsonSyntaxException;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.plugin.http.common.http.AuthType;
-import io.cdap.plugin.http.common.http.HttpClient;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 import io.cdap.plugin.http.source.common.BaseHttpSourceConfig;
 import io.cdap.plugin.http.source.common.http.HttpClient;

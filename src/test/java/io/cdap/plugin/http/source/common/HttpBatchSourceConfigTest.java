@@ -20,11 +20,11 @@ import com.google.auth.oauth2.AccessToken;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
 import io.cdap.cdap.etl.mock.validation.MockFailureCollector;
-import io.cdap.plugin.http.common.http.HttpClient;
 import io.cdap.plugin.http.common.http.OAuthUtil;
-import io.cdap.plugin.http.common.pagination.BaseHttpPaginationIterator;
-import io.cdap.plugin.http.common.pagination.PaginationIteratorFactory;
 import io.cdap.plugin.http.source.batch.HttpBatchSourceConfig;
+import io.cdap.plugin.http.source.common.http.HttpClient;
+import io.cdap.plugin.http.source.common.pagination.BaseHttpPaginationIterator;
+import io.cdap.plugin.http.source.common.pagination.PaginationIteratorFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;

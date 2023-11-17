@@ -17,6 +17,7 @@ package io.cdap.plugin.http.source.common.http;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Strings;
+import io.cdap.plugin.http.common.http.HttpRequest;
 import io.cdap.plugin.http.source.common.BaseHttpSourceConfig;
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
