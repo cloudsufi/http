@@ -35,6 +35,7 @@ public class DelimitedSchemaDetectorTest {
   RawStringPerLine rawStringPerLineIterator;
   HttpBatchSourceConfig configSkipHeaderTrue;
   HttpBatchSourceConfig configSkipHeaderFalse;
+  HttpBatchSourceConfig configSkipHeaderTrueAndQuotesEnabled;
   String csvDelimiter = ",";
   String tsvDelimiter = "\t";
 
@@ -46,6 +47,8 @@ public class DelimitedSchemaDetectorTest {
     MockitoAnnotations.initMocks(this);
     configSkipHeaderTrue = HttpBatchSourceConfig.builder().setCsvSkipFirstRow("true").build();
     configSkipHeaderFalse = HttpBatchSourceConfig.builder().setCsvSkipFirstRow("false").build();
+    configSkipHeaderTrueAndQuotesEnabled = HttpBatchSourceConfig.builder().setCsvSkipFirstRow("true")
+      .setEnableQuotesValues(true).build();
     expectedSchemaWithHeaders = Schema.recordOf("text",
             Schema.Field.of("name", Schema.of(Schema.Type.STRING)),
             Schema.Field.of("age", Schema.of(Schema.Type.INT)),
@@ -99,6 +102,26 @@ public class DelimitedSchemaDetectorTest {
     Schema schema = DelimitedSchemaDetector.detectSchema(
             configSkipHeaderTrue, tsvDelimiter, rawStringPerLineIterator, null);
     Assert.assertEquals(expectedSchemaWithHeaders, schema);
+  }
+
+  @Test
+  public void testDetectSchemaWithQuotesEnabled() throws IOException {
+    String[] lines = new String[]{"name,age,isIndian,country", "\"raj,singh\",29,true,india", "rahul,30,false,"};
+    Mockito.when(rawStringPerLineIterator.hasNext()).thenReturn(true, true, true, false);
+    Mockito.when(rawStringPerLineIterator.next()).thenReturn(lines[0], lines[1], lines[2]);
+    Schema schema = DelimitedSchemaDetector.detectSchema(
+      configSkipHeaderTrueAndQuotesEnabled, csvDelimiter, rawStringPerLineIterator, null);
+    Assert.assertEquals(expectedSchemaWithHeaders, schema);
+  }
+
+  @Test
+  public void testDetectSchemaWithQuotesDisabled() throws IOException {
+    String[] lines = new String[]{"name,age,isIndian,country", "\"raj,singh\",29,true,india", "rahul,30,false,"};
+    Mockito.when(rawStringPerLineIterator.hasNext()).thenReturn(true, true, true, false);
+    Mockito.when(rawStringPerLineIterator.next()).thenReturn(lines[0], lines[1], lines[2]);
+    Schema schema = DelimitedSchemaDetector.detectSchema(
+      configSkipHeaderTrue, csvDelimiter, rawStringPerLineIterator, null);
+    Assert.assertNotEquals(expectedSchemaWithHeaders, schema);
   }
 
 }
