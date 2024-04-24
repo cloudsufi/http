@@ -20,9 +20,12 @@ import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.plugin.format.delimited.common.DataTypeDetectorStatusKeeper;
 import io.cdap.plugin.format.delimited.common.DataTypeDetectorUtils;
+import io.cdap.plugin.format.delimited.input.SplitQuotesIterator;
 import io.cdap.plugin.http.source.batch.HttpBatchSourceConfig;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -39,7 +42,7 @@ public class DelimitedSchemaDetector {
     try {
       for (int rowIndex = 0; rowIndex < sampleSize && rawStringPerLine.hasNext(); rowIndex++) {
         line = rawStringPerLine.next();
-        rowValue = line.split(delimiter, -1);
+        rowValue = getRowValues(line, config.getEnableQuotesValues(), delimiter);
         if (rowIndex == 0) {
           columnNames = DataTypeDetectorUtils.setColumnNames(line, config.getCsvSkipFirstRow(),
                   config.getEnableQuotesValues(), delimiter);
@@ -60,5 +63,24 @@ public class DelimitedSchemaDetector {
     List<Schema.Field> fields = DataTypeDetectorUtils.detectDataTypeOfEachDatasetColumn(
             new HashMap<>(), columnNames, dataTypeDetectorStatusKeeper);
     return Schema.recordOf("text", fields);
+  }
+
+  /**
+   * @param rawLine            line to parse and find out the exact number of columns in a row.
+   * @param enableQuotedValues flag whether file can contain Quoted values.
+   * @param delimiter          delimiter for the file
+   * @return Array of all the column values within the provided row.
+   */
+  public static String[] getRowValues(String rawLine, boolean enableQuotedValues, String delimiter) {
+    if (!enableQuotedValues) {
+      return rawLine.split(delimiter, -1);
+    } else {
+      Iterator<String> splitsIterator = new SplitQuotesIterator(rawLine, delimiter, null, false);
+      List<String> rowValues = new ArrayList<>();
+      while (splitsIterator.hasNext()) {
+        rowValues.add(splitsIterator.next());
+      }
+      return rowValues.toArray(new String[rowValues.size()]);
+    }
   }
 }
