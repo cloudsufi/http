@@ -83,6 +83,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
   public static final String REQUEST_METHOD_POST = "POST";
   public static final String REQUEST_METHOD_PUT = "PUT";
   public static final String REQUEST_METHOD_DELETE = "DELETE";
+  public static final String REQUEST_METHOD_PATCH = "PATCH";
 
   private final HTTPSinkConfig config;
   private final MessageBuffer messageBuffer;
@@ -120,11 +121,13 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
   @Override
   public void write(StructuredRecord input, StructuredRecord unused) throws IOException {
     configURL = url;
-    if (config.getMethod().equals(REQUEST_METHOD_POST) || config.getMethod().equals(REQUEST_METHOD_PUT)) {
+    if (config.getMethod().equals(REQUEST_METHOD_POST) || config.getMethod().equals(REQUEST_METHOD_PUT) ||
+      config.getMethod().equals(REQUEST_METHOD_PATCH)) {
       messageBuffer.add(input);
     }
 
-    if (config.getMethod().equals(REQUEST_METHOD_PUT) || config.getMethod().equals(REQUEST_METHOD_DELETE)
+    if (config.getMethod().equals(REQUEST_METHOD_PUT) || config.getMethod().equals(REQUEST_METHOD_PATCH) ||
+      config.getMethod().equals(REQUEST_METHOD_DELETE)
       && !placeHolderList.isEmpty()) {
       configURL = updateURLWithPlaceholderValue(input);
     }
@@ -277,7 +280,9 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     headers.put("Instance-Follow-Redirects", String.valueOf(config.getFollowRedirects()));
     headers.put("charset", config.getCharset());
 
-    if (config.getMethod().equals(REQUEST_METHOD_POST) || config.getMethod().equals(REQUEST_METHOD_PUT)) {
+    if (config.getMethod().equals(REQUEST_METHOD_POST)
+      || config.getMethod().equals(REQUEST_METHOD_PATCH)
+      || config.getMethod().equals(REQUEST_METHOD_PUT)) {
       if (!headers.containsKey("Content-Type")) {
         headers.put("Content-Type", contentType);
       }
@@ -302,7 +307,8 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
    */
   private List<PlaceholderBean> getPlaceholderListFromURL() {
     List<PlaceholderBean> placeholderList = new ArrayList<>();
-    if (!(config.getMethod().equals(REQUEST_METHOD_PUT) || config.getMethod().equals(REQUEST_METHOD_DELETE))) {
+    if (!(config.getMethod().equals(REQUEST_METHOD_PUT) || config.getMethod().equals(REQUEST_METHOD_PATCH) ||
+      config.getMethod().equals(REQUEST_METHOD_DELETE))) {
       return placeholderList;
     }
     Pattern pattern = Pattern.compile(REGEX_HASHED_VAR);
