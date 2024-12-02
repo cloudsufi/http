@@ -56,11 +56,11 @@ public class HttpStreamingSourceETLTest extends HttpSourceETLTest {
   private static final ArtifactSummary APP_ARTIFACT = new ArtifactSummary("data-streams", "1.0.0");
   private static final int WAIT_FOR_RECORDS_TIMEOUT_SECONDS = 60;
   private static final long WAIT_FOR_RECORDS_POLLING_INTERVAL_MS = 100;
+  public static final String EXPLORE_ENABLED = "explore.enabled";
 
   @ClassRule
   public static final TestConfiguration CONFIG =
-    new TestConfiguration(Constants.Explore.EXPLORE_ENABLED, false,
-                          Constants.AppFabric.SPARK_COMPAT, Compat.SPARK_COMPAT);
+    new TestConfiguration(EXPLORE_ENABLED, false, Constants.AppFabric.SPARK_COMPAT, Compat.SPARK_COMPAT);
 
   @BeforeClass
   public static void setupTest() throws Exception {
