@@ -15,7 +15,6 @@
  */
 package io.cdap.plugin.http.source.batch;
 
-import io.cdap.plugin.http.common.pagination.page.BasePage;
 import io.cdap.plugin.http.common.pagination.page.PageEntry;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.InputFormat;
@@ -29,7 +28,7 @@ import java.util.List;
 
 /**
  * InputFormat for mapreduce job, which provides a single split of data. Since in general pagination cannot
- * parallelized.
+ * parallelize.
  */
 public class HttpInputFormat extends InputFormat {
   @Override

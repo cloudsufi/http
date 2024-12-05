@@ -16,6 +16,9 @@
 package io.cdap.plugin.http.source.common;
 
 
+import io.cdap.cdap.api.exception.ErrorCategory;
+import io.cdap.cdap.api.exception.ErrorType;
+import io.cdap.cdap.api.exception.ErrorUtils;
 import io.cdap.plugin.http.common.http.HttpResponse;
 
 import java.io.BufferedReader;
@@ -61,14 +64,16 @@ public class RawStringPerLine implements Closeable, Iterator<String> {
             isLineRead = true;
             return lastLine != null;
         } catch (IOException e) { // we need to catch this, since hasNext() does not have "throws" in parent
-            throw new RuntimeException("Failed to read line from http page buffer", e);
+            String errorMessage = "Unable to read line from http page buffer";
+            throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+              errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
         }
     }
 
     @Override
     public String next() {
         if (!hasNext()) { // calling hasNext will also read the line;
-            throw new NoSuchElementException();
+            throw new NoSuchElementException("Unable to read the next line.");
         }
         isLineRead = false;
         return lastLine;

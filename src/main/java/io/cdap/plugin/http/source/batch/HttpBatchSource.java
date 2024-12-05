@@ -31,16 +31,19 @@ import io.cdap.cdap.etl.api.PipelineConfigurer;
 import io.cdap.cdap.etl.api.batch.BatchRuntimeContext;
 import io.cdap.cdap.etl.api.batch.BatchSource;
 import io.cdap.cdap.etl.api.batch.BatchSourceContext;
-import io.cdap.cdap.etl.api.exception.*;
+import io.cdap.cdap.etl.api.exception.ErrorDetailsProviderSpec;
 import io.cdap.plugin.common.Asset;
 import io.cdap.plugin.common.LineageRecorder;
-import io.cdap.plugin.http.common.*;
-import io.cdap.plugin.http.common.pagination.page.BasePage;
+
+import io.cdap.plugin.http.common.HttpErrorDetailsProvider;
 import io.cdap.plugin.http.common.pagination.page.PageEntry;
 import org.apache.hadoop.io.NullWritable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -90,15 +93,16 @@ public class HttpBatchSource extends BatchSource<NullWritable, PageEntry, Struct
       .setFqn(config.getUrl()).build();
     LineageRecorder lineageRecorder = new LineageRecorder(context, asset);
     lineageRecorder.createExternalDataset(schema);
-    lineageRecorder.recordRead("Read", String.format("Read from HTTP '%s'", config.getUrl()),
-      Preconditions.checkNotNull(schema.getFields()).stream()
-        .map(Schema.Field::getName)
-        .collect(Collectors.toList()));
+    List<String> getNameList = Objects.nonNull(schema) ? Preconditions.checkNotNull(schema.getFields()).stream()
+      .map(Schema.Field::getName)
+      .collect(Collectors.toList()) : new ArrayList<>();
+    lineageRecorder.recordRead("Read", String.format("Read from HTTP '%s'", config.getUrl()), getNameList);
 
-    context.setInput(Input.of(config.getReferenceNameOrNormalizedFQN(), new HttpInputFormatProvider(config)));
     // set error details provider
     context.setErrorDetailsProvider(
-            new ErrorDetailsProviderSpec(HttpErrorDetailsProvider.class.getName()));
+      new ErrorDetailsProviderSpec(HttpErrorDetailsProvider.class.getName()));
+
+    context.setInput(Input.of(config.getReferenceNameOrNormalizedFQN(), new HttpInputFormatProvider(config)));
   }
 
   @Override

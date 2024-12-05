@@ -26,92 +26,92 @@ import io.cdap.cdap.api.exception.ErrorCategory.ErrorCategoryEnum;
 import io.cdap.cdap.api.exception.ProgramFailureException;
 import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
 
-import java.io.UnsupportedEncodingException;
 import java.util.List;
 
 import java.util.NoSuchElementException;
 
 /**
- Error details provided for the HTTP
+ * Error details provided for the HTTP
  **/
 public class HttpErrorDetailsProvider implements ErrorDetailsProvider {
-  @Override
-  public ProgramFailureException getExceptionDetails(Exception e, ErrorContext errorContext) {
-    List<Throwable> causalChain = Throwables.getCausalChain(e);
-    for (Throwable t : causalChain) {
-      if (t instanceof ProgramFailureException) {
-        // if causal chain already has program failure exception, return null to avoid double wrap.
+    @Override
+    public ProgramFailureException getExceptionDetails(Exception e, ErrorContext errorContext) {
+        List<Throwable> causalChain = Throwables.getCausalChain(e);
+        for (Throwable t : causalChain) {
+            if (t instanceof ProgramFailureException) {
+                // if causal chain already has program failure exception, return null to avoid double wrap.
+                return null;
+            }
+            if (t instanceof IllegalArgumentException) {
+                return getProgramFailureException((IllegalArgumentException) t, errorContext);
+            }
+            if (t instanceof IllegalStateException) {
+                return getProgramFailureException((IllegalStateException) t, errorContext);
+            }
+            if (t instanceof InvalidConfigPropertyException) {
+                return getProgramFailureException((InvalidConfigPropertyException) t, errorContext);
+            }
+            if (t instanceof NoSuchElementException) {
+                return getProgramFailureException((NoSuchElementException) t, errorContext);
+            }
+        }
         return null;
-      }
-      if (t instanceof IllegalArgumentException) {
-        return getProgramFailureException((IllegalArgumentException) t, errorContext);
-      }
-      if (t instanceof IllegalStateException) {
-        return getProgramFailureException((IllegalStateException) t, errorContext);
-      }
-      if (t instanceof InvalidConfigPropertyException) {
-        return getProgramFailureException((InvalidConfigPropertyException) t, errorContext);
-      }
-      if (t instanceof NoSuchElementException) {
-        return getProgramFailureException((NoSuchElementException) t, errorContext);
-      }
     }
-    return null;
-  }
 
-  /**
-   * Get a ProgramFailureException with the given error
-   * information from {@link IllegalArgumentException}.
-   *
-   * @param e The IllegalArgumentException to get the error information from.
-   * @return A ProgramFailureException with the given error information.
-   */
-  private ProgramFailureException getProgramFailureException(IllegalArgumentException e, ErrorContext errorContext) {
-    String errorMessage = e.getMessage();
-    String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-    return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
-      String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.USER, false, e);
-  }
+    /**
+     * Get a ProgramFailureException with the given error
+     * information from {@link IllegalArgumentException}.
+     *
+     * @param e The IllegalArgumentException to get the error information from.
+     * @return A ProgramFailureException with the given error information.
+     */
+    private ProgramFailureException getProgramFailureException(IllegalArgumentException e, ErrorContext errorContext) {
+        String errorMessage = e.getMessage();
+        String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+                String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.USER, false, e);
+    }
 
-  /**
-   * Get a ProgramFailureException with the given error
-   * information from {@link IllegalStateException}.
-   *
-   * @param e The IllegalStateException to get the error information from.
-   * @return A ProgramFailureException with the given error information.
-   */
-  private ProgramFailureException getProgramFailureException(IllegalStateException e, ErrorContext errorContext) {
-    String errorMessage = e.getMessage();
-    String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-    return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
-      String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
-  }
+    /**
+     * Get a ProgramFailureException with the given error
+     * information from {@link IllegalStateException}.
+     *
+     * @param e The IllegalStateException to get the error information from.
+     * @return A ProgramFailureException with the given error information.
+     */
+    private ProgramFailureException getProgramFailureException(IllegalStateException e, ErrorContext errorContext) {
+        String errorMessage = e.getMessage();
+        String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+                String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
+    }
 
-  /**
-   * Get a ProgramFailureException with the given error
-   * information from {@link InvalidConfigPropertyException}.
-   *
-   * @param e The InvalidConfigPropertyException to get the error information from.
-   * @return A ProgramFailureException with the given error information.
-   */
-  private ProgramFailureException getProgramFailureException(InvalidConfigPropertyException e, ErrorContext errorContext) {
-    String errorMessage = e.getMessage();
-    String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-    return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
-      String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
-  }
+    /**
+     * Get a ProgramFailureException with the given error
+     * information from {@link InvalidConfigPropertyException}.
+     *
+     * @param e The InvalidConfigPropertyException to get the error information from.
+     * @return A ProgramFailureException with the given error information.
+     */
+    private ProgramFailureException getProgramFailureException(InvalidConfigPropertyException e,
+                                                               ErrorContext errorContext) {
+        String errorMessage = e.getMessage();
+        String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+                String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
+    }
 
-  /**
-   * Get a ProgramFailureException with the given error
-   * information from {@link NoSuchElementException}.
-   *
-   * @param e The NoSuchElementException to get the error information from.
-   * @return A ProgramFailureException with the given error information.
-   */
-  private ProgramFailureException getProgramFailureException(NoSuchElementException e, ErrorContext errorContext) {
-    String errorMessage = e.getMessage();
-    String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-    return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
-      String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
-  }
+    /**
+     * Get a ProgramFailureException with the given error
+     * information from {@link NoSuchElementException}.
+     *
+     * @param e The NoSuchElementException to get the error information from.
+     * @return A ProgramFailureException with the given error information.
+     */
+    private ProgramFailureException getProgramFailureException(NoSuchElementException e, ErrorContext errorContext) {
+        String errorMessage = e.getMessage();
+        String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+                String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
+    }
 }

@@ -376,7 +376,8 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
         .timeout(config.getMaxRetryDuration(), TimeUnit.SECONDS)
         .until(this::executeHTTPServiceAndCheckStatusCode);
     } catch (Exception e) {
-      String errorMessage = "Error while executing http request for remaining input messages after the batch execution.";
+      String errorMessage = "Error while executing http request for remaining input messages" +
+              " after the batch execution.";
       throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
         errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new RuntimeException(errorMessage));
     }

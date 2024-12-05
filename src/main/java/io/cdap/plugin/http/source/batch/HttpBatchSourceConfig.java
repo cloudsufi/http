@@ -17,7 +17,9 @@ package io.cdap.plugin.http.source.batch;
 
 import com.google.common.base.Strings;
 import com.google.gson.JsonSyntaxException;
-import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.cdap.api.exception.ErrorCategory;
+import io.cdap.cdap.api.exception.ErrorType;
+import io.cdap.cdap.api.exception.ErrorUtils;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.plugin.http.common.http.AuthType;
 import io.cdap.plugin.http.common.http.HttpClient;
@@ -59,19 +61,14 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
   }
 
   public void validateCredentials(FailureCollector collector) {
-    try {
-      if (getAuthType() == AuthType.OAUTH2) {
-        validateOAuth2Credentials(collector);
-      } else if (getAuthType() == AuthType.BASIC_AUTH) {
-        validateBasicAuthCredentials(collector);
-      }
-    } catch (IOException e) {
-      String errorMessage = "Unable to authenticate the given info : " + e.getMessage();
-      collector.addFailure(errorMessage, null);
+    if (getAuthType() == AuthType.OAUTH2) {
+      validateOAuth2Credentials(collector);
+    } else if (getAuthType() == AuthType.BASIC_AUTH) {
+      validateBasicAuthCredentials(collector);
     }
   }
 
-  private void validateOAuth2Credentials(FailureCollector collector) throws IOException {
+  private void validateOAuth2Credentials(FailureCollector collector) {
     if (!containsMacro(PROPERTY_CLIENT_ID) && !containsMacro(PROPERTY_CLIENT_SECRET) &&
       !containsMacro(PROPERTY_TOKEN_URL) && !containsMacro(PROPERTY_REFRESH_TOKEN) &&
       !containsMacro(PROPERTY_PROXY_PASSWORD) && !containsMacro(PROPERTY_PROXY_USERNAME) &&
@@ -93,25 +90,24 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
       } catch (JsonSyntaxException | HttpHostConnectException e) {
         String errorMessage = "Error occurred during credential validation : " + e.getMessage();
         collector.addFailure(errorMessage, null);
+      } catch (IOException e) {
+        String errorMessage = "Unable to validate OAuth and process the request.";
+        throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+          errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
       }
     }
   }
 
-  public void validateBasicAuthCredentials(FailureCollector collector) throws IOException {
-    try {
-      if (!containsMacro(PROPERTY_URL) && !containsMacro(PROPERTY_USERNAME) && !containsMacro(PROPERTY_PASSWORD) &&
-        !containsMacro(PROPERTY_PROXY_USERNAME) && !containsMacro(PROPERTY_PROXY_PASSWORD)
-        && !containsMacro(PROPERTY_PROXY_URL)) {
-        HttpClient httpClient = new HttpClient(this);
-        validateBasicAuthResponse(collector, httpClient);
-      }
-    } catch (HttpHostConnectException e) {
-      String errorMessage = "Error occurred during credential validation : " + e.getMessage();
-      collector.addFailure(errorMessage, "Please ensure that correct credentials are provided.");
+  public void validateBasicAuthCredentials(FailureCollector collector) {
+    if (!containsMacro(PROPERTY_URL) && !containsMacro(PROPERTY_USERNAME) && !containsMacro(PROPERTY_PASSWORD) &&
+      !containsMacro(PROPERTY_PROXY_USERNAME) && !containsMacro(PROPERTY_PROXY_PASSWORD)
+      && !containsMacro(PROPERTY_PROXY_URL)) {
+      HttpClient httpClient = new HttpClient(this);
+      validateBasicAuthResponse(collector, httpClient);
     }
   }
 
-  public void validateBasicAuthResponse(FailureCollector collector, HttpClient httpClient) throws IOException {
+  public void validateBasicAuthResponse(FailureCollector collector, HttpClient httpClient) {
     try (CloseableHttpResponse response = httpClient.executeHTTP(getUrl())) {
       int statusCode = response.getStatusLine().getStatusCode();
       if (statusCode != HttpStatus.SC_OK) {
@@ -123,6 +119,10 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
           collector.addFailure(errorMessage, "Please ensure that correct credentials are provided.");
         }
       }
+    } catch (IOException e) {
+      String errorMessage = "Unable to process the response and validate credentials";
+      throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+        errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
     }
   }
 
@@ -195,10 +195,11 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
     private String password;
 
 
-    public HttpBatchSourceConfigBuilder setReferenceName (String referenceName) {
+    public HttpBatchSourceConfigBuilder setReferenceName(String referenceName) {
       this.referenceName = referenceName;
       return this;
     }
+
     public HttpBatchSourceConfigBuilder setAuthUrl(String authUrl) {
       this.authUrl = authUrl;
       return this;

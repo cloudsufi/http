@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Stream;
@@ -545,7 +546,7 @@ public abstract class BaseHttpSourceConfig extends BaseHttpConfig {
     Map<String, String> result = new HashMap<>();
 
     if (!Strings.isNullOrEmpty(schema)) {
-      for (Schema.Field field : getSchema().getFields()) {
+      for (Schema.Field field : Objects.requireNonNull(Objects.requireNonNull(getSchema()).getFields())) {
         result.put(field.getName(), "/" + field.getName());
       }
     }
@@ -562,6 +563,7 @@ public abstract class BaseHttpSourceConfig extends BaseHttpConfig {
   public String getReferenceNameOrNormalizedFQN() {
     return Strings.isNullOrEmpty(referenceName) ? ReferenceNames.normalizeFqn(url) : referenceName;
   }
+
 
   public void validate(FailureCollector failureCollector) {
     super.validate(failureCollector);

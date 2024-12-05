@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Class that detects the schema of the delimited file.
@@ -45,23 +46,23 @@ public class DelimitedSchemaDetector {
         rowValue = getRowValues(line, config.getEnableQuotesValues(), delimiter);
         if (rowIndex == 0) {
           columnNames = DataTypeDetectorUtils.setColumnNames(line, config.getCsvSkipFirstRow(),
-                  config.getEnableQuotesValues(), delimiter);
-          if (config.getCsvSkipFirstRow()) {
+            config.getEnableQuotesValues(), delimiter);
+          if (Boolean.TRUE.equals(config.getCsvSkipFirstRow())) {
             continue;
           }
         }
         DataTypeDetectorUtils.detectDataTypeOfRowValues(new HashMap<>(), dataTypeDetectorStatusKeeper, columnNames,
-                rowValue);
+          rowValue);
       }
       dataTypeDetectorStatusKeeper.validateDataTypeDetector();
     } catch (Exception e) {
       failureCollector.addFailure(String.format("Error while reading the file to infer the schema. Error: %s",
-                      e.getMessage()), null)
-              .withStacktrace(e.getStackTrace());
+          e.getMessage()), null)
+        .withStacktrace(e.getStackTrace());
       return null;
     }
     List<Schema.Field> fields = DataTypeDetectorUtils.detectDataTypeOfEachDatasetColumn(
-            new HashMap<>(), columnNames, dataTypeDetectorStatusKeeper);
+      new HashMap<>(), (Objects.nonNull(columnNames) ? columnNames : new String[0]), dataTypeDetectorStatusKeeper);
     return Schema.recordOf("text", fields);
   }
 

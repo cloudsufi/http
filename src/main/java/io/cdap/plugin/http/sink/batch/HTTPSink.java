@@ -84,12 +84,12 @@ public class HTTPSink extends BatchSink<StructuredRecord, StructuredRecord, Stru
     }
     lineageRecorder.recordWrite("Write", String.format("Wrote to HTTP '%s'", config.getUrl()), fields);
 
-    context.addOutput(Output.of(config.getReferenceNameOrNormalizedFQN(),
-      new HTTPSink.HTTPOutputFormatProvider(config, inputSchema)));
-
     // set error details provider
     context.setErrorDetailsProvider(
       new ErrorDetailsProviderSpec(HttpErrorDetailsProvider.class.getName()));
+
+    context.addOutput(Output.of(config.getReferenceNameOrNormalizedFQN(),
+      new HTTPSink.HTTPOutputFormatProvider(config, inputSchema)));
 
   }
 
