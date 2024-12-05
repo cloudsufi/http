@@ -33,57 +33,57 @@ import java.io.IOException;
  * OutputFormat for HTTP writing
  */
 public class HTTPOutputFormat extends OutputFormat<StructuredRecord, StructuredRecord> {
-    private static final Gson GSON = new Gson();
-    static final String CONFIG_KEY = "http.sink.config";
-    static final String INPUT_SCHEMA_KEY = "http.sink.input.schema";
+  private static final Gson GSON = new Gson();
+  static final String CONFIG_KEY = "http.sink.config";
+  static final String INPUT_SCHEMA_KEY = "http.sink.input.schema";
 
-    @Override
-    public RecordWriter<StructuredRecord, StructuredRecord> getRecordWriter(TaskAttemptContext context) {
-        Configuration hConf = context.getConfiguration();
-        HTTPSinkConfig config = GSON.fromJson(hConf.get(CONFIG_KEY), HTTPSinkConfig.class);
-        Schema inputSchema;
-        try {
-            inputSchema = Schema.parseJson(hConf.get(INPUT_SCHEMA_KEY));
-            return new HTTPRecordWriter(config, inputSchema);
-        } catch (IOException e) {
-            String errorMessage = "Unable to parse and write the record";
-            throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
-                    errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
-        }
+  @Override
+  public RecordWriter<StructuredRecord, StructuredRecord> getRecordWriter(TaskAttemptContext context) {
+    Configuration hConf = context.getConfiguration();
+    HTTPSinkConfig config = GSON.fromJson(hConf.get(CONFIG_KEY), HTTPSinkConfig.class);
+    Schema inputSchema;
+    try {
+      inputSchema = Schema.parseJson(hConf.get(INPUT_SCHEMA_KEY));
+      return new HTTPRecordWriter(config, inputSchema);
+    } catch (IOException e) {
+      String errorMessage = "Unable to parse and write the record";
+      throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+        errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
     }
+  }
 
-    @Override
-    public void checkOutputSpecs(JobContext jobContext) {
+  @Override
+  public void checkOutputSpecs(JobContext jobContext) {
 
-    }
+  }
 
-    @Override
-    public OutputCommitter getOutputCommitter(TaskAttemptContext context) {
-        return new OutputCommitter() {
-            @Override
-            public void setupJob(JobContext jobContext) {
+  @Override
+  public OutputCommitter getOutputCommitter(TaskAttemptContext context) {
+    return new OutputCommitter() {
+      @Override
+      public void setupJob(JobContext jobContext) {
 
-            }
+      }
 
-            @Override
-            public void setupTask(TaskAttemptContext taskAttemptContext) {
+      @Override
+      public void setupTask(TaskAttemptContext taskAttemptContext) {
 
-            }
+      }
 
-            @Override
-            public boolean needsTaskCommit(TaskAttemptContext taskAttemptContext) {
-                return false;
-            }
+      @Override
+      public boolean needsTaskCommit(TaskAttemptContext taskAttemptContext) {
+        return false;
+      }
 
-            @Override
-            public void commitTask(TaskAttemptContext taskAttemptContext) {
+      @Override
+      public void commitTask(TaskAttemptContext taskAttemptContext) {
 
-            }
+      }
 
-            @Override
-            public void abortTask(TaskAttemptContext taskAttemptContext) {
+      @Override
+      public void abortTask(TaskAttemptContext taskAttemptContext) {
 
-            }
-        };
-    }
+      }
+    };
+  }
 }

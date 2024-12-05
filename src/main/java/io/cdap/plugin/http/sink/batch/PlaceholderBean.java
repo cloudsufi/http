@@ -20,27 +20,27 @@ package io.cdap.plugin.http.sink.batch;
  * This class stores the placeholder information to avoid performing string functions for each record.
  */
 public class PlaceholderBean {
-    private static final String PLACEHOLDER_FORMAT = "#%s";
-    private final String placeHolderKey;
-    private final int startIndex;
-    private final int endIndex;
+  private static final String PLACEHOLDER_FORMAT = "#%s";
+  private final String placeHolderKey;
+  private final int startIndex;
+  private final int endIndex;
 
-    public PlaceholderBean(String url, String placeHolderKey) {
-        String placeHolderKeyWithPrefix = String.format(PLACEHOLDER_FORMAT, placeHolderKey);
-        this.placeHolderKey = placeHolderKey;
-        this.startIndex = url.indexOf(placeHolderKeyWithPrefix);
-        this.endIndex = startIndex + placeHolderKeyWithPrefix.length();
-    }
+  public PlaceholderBean(String url, String placeHolderKey) {
+    String placeHolderKeyWithPrefix = String.format(PLACEHOLDER_FORMAT, placeHolderKey);
+    this.placeHolderKey = placeHolderKey;
+    this.startIndex = url.indexOf(placeHolderKeyWithPrefix);
+    this.endIndex = startIndex + placeHolderKeyWithPrefix.length();
+  }
 
-    public String getPlaceHolderKey() {
-        return placeHolderKey;
-    }
+  public String getPlaceHolderKey() {
+    return placeHolderKey;
+  }
 
-    public int getStartIndex() {
-        return startIndex;
-    }
+  public int getStartIndex() {
+    return startIndex;
+  }
 
-    public int getEndIndex() {
-        return endIndex;
-    }
+  public int getEndIndex() {
+    return endIndex;
+  }
 }

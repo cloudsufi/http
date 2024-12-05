@@ -31,8 +31,10 @@ import io.cdap.cdap.etl.api.PipelineConfigurer;
 import io.cdap.cdap.etl.api.batch.BatchRuntimeContext;
 import io.cdap.cdap.etl.api.batch.BatchSource;
 import io.cdap.cdap.etl.api.batch.BatchSourceContext;
+import io.cdap.cdap.etl.api.exception.*;
 import io.cdap.plugin.common.Asset;
 import io.cdap.plugin.common.LineageRecorder;
+import io.cdap.plugin.http.common.*;
 import io.cdap.plugin.http.common.pagination.page.BasePage;
 import io.cdap.plugin.http.common.pagination.page.PageEntry;
 import org.apache.hadoop.io.NullWritable;
@@ -94,6 +96,9 @@ public class HttpBatchSource extends BatchSource<NullWritable, PageEntry, Struct
         .collect(Collectors.toList()));
 
     context.setInput(Input.of(config.getReferenceNameOrNormalizedFQN(), new HttpInputFormatProvider(config)));
+    // set error details provider
+    context.setErrorDetailsProvider(
+            new ErrorDetailsProviderSpec(HttpErrorDetailsProvider.class.getName()));
   }
 
   @Override
