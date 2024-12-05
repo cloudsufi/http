@@ -16,14 +16,13 @@
 
 package io.cdap.plugin.http.common;
 
+import com.google.common.base.Throwables;
 import io.cdap.cdap.api.exception.ErrorCategory;
 import io.cdap.cdap.api.exception.ErrorType;
 import io.cdap.cdap.api.exception.ErrorUtils;
+import io.cdap.cdap.api.exception.ProgramFailureException;
 import io.cdap.cdap.etl.api.exception.ErrorContext;
 import io.cdap.cdap.etl.api.exception.ErrorDetailsProvider;
-import com.google.common.base.Throwables;
-import io.cdap.cdap.api.exception.ErrorCategory.ErrorCategoryEnum;
-import io.cdap.cdap.api.exception.ProgramFailureException;
 import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
 
 import java.util.List;
@@ -68,7 +67,8 @@ public class HttpErrorDetailsProvider implements ErrorDetailsProvider {
     private ProgramFailureException getProgramFailureException(IllegalArgumentException e, ErrorContext errorContext) {
         String errorMessage = e.getMessage();
         String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+                errorMessage,
                 String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.USER, false, e);
     }
 
@@ -82,7 +82,8 @@ public class HttpErrorDetailsProvider implements ErrorDetailsProvider {
     private ProgramFailureException getProgramFailureException(IllegalStateException e, ErrorContext errorContext) {
         String errorMessage = e.getMessage();
         String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+                errorMessage,
                 String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
     }
 
@@ -97,7 +98,8 @@ public class HttpErrorDetailsProvider implements ErrorDetailsProvider {
                                                                ErrorContext errorContext) {
         String errorMessage = e.getMessage();
         String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+                errorMessage,
                 String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
     }
 
@@ -111,7 +113,8 @@ public class HttpErrorDetailsProvider implements ErrorDetailsProvider {
     private ProgramFailureException getProgramFailureException(NoSuchElementException e, ErrorContext errorContext) {
         String errorMessage = e.getMessage();
         String errorMessageFormat = "Error occurred in the phase: '%s'. Error message: %s";
-        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategoryEnum.PLUGIN), errorMessage,
+        return ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+                errorMessage,
                 String.format(errorMessageFormat, errorContext.getPhase(), errorMessage), ErrorType.SYSTEM, false, e);
     }
 }
