@@ -48,9 +48,7 @@ public class HTTPOutputFormat extends OutputFormat<StructuredRecord, StructuredR
       inputSchema = Schema.parseJson(hConf.get(INPUT_SCHEMA_KEY));
       return new HTTPRecordWriter(config, inputSchema);
     } catch (IOException e) {
-      String errorMessage = "Unable to parse and write the record";
-      throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
-        errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
+      throw new IllegalStateException("Unable to parse the input schema. Reason: " + e.getMessage(), e);
     }
   }
 

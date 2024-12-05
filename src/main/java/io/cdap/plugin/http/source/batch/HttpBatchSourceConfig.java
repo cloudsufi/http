@@ -119,10 +119,13 @@ public class HttpBatchSourceConfig extends BaseHttpSourceConfig {
           collector.addFailure(errorMessage, "Please ensure that correct credentials are provided.");
         }
       }
+    } catch (HttpHostConnectException e) {
+      String errorMessage = "Error occurred during credential validation : " + e.getMessage();
+      collector.addFailure(errorMessage, "Please ensure that correct credentials are provided.");
     } catch (IOException e) {
       String errorMessage = "Unable to process the response and validate credentials";
       throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
-        errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
+              errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, e);
     }
   }
 

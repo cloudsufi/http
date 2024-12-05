@@ -66,7 +66,7 @@ public class RawStringPerLine implements Closeable, Iterator<String> {
         } catch (IOException e) { // we need to catch this, since hasNext() does not have "throws" in parent
             String errorMessage = "Unable to read line from http page buffer";
             throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
-              errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, new IOException(errorMessage));
+                    errorMessage, e.getMessage(), ErrorType.UNKNOWN, true, e);
         }
     }
 

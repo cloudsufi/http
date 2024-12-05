@@ -38,6 +38,7 @@ import io.cdap.plugin.http.common.HttpErrorDetailsProvider;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -79,8 +80,8 @@ public class HTTPSink extends BatchSink<StructuredRecord, StructuredRecord, Stru
     if (inputSchema == null) {
       fields = Collections.emptyList();
     } else {
-      assert inputSchema.getFields() != null;
-      fields = inputSchema.getFields().stream().map(Schema.Field::getName).collect(Collectors.toList());
+      fields = Objects.requireNonNull(Objects.requireNonNull(inputSchema).getFields()).stream()
+              .map(Schema.Field::getName).collect(Collectors.toList());
     }
     lineageRecorder.recordWrite("Write", String.format("Wrote to HTTP '%s'", config.getUrl()), fields);
 

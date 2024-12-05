@@ -57,7 +57,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
-import java.net.ProtocolException;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -75,7 +74,6 @@ import java.util.regex.Pattern;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
@@ -133,8 +131,7 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     }
 
     if (config.getMethod().equals(REQUEST_METHOD_PUT) || config.getMethod().equals(REQUEST_METHOD_PATCH) ||
-      config.getMethod().equals(REQUEST_METHOD_DELETE)
-        && !placeHolderList.isEmpty()) {
+            config.getMethod().equals(REQUEST_METHOD_DELETE) && !placeHolderList.isEmpty()) {
       configURL = updateURLWithPlaceholderValue(input);
     }
 
@@ -180,15 +177,11 @@ public class HTTPRecordWriter extends RecordWriter<StructuredRecord, StructuredR
     LOG.debug("HTTP Request Attempt No. : {}", ++retryCount);
 
     // Try-with-resources ensures proper resource management
-    try (CloseableHttpClient httpClient = createHttpClient(configURL)) {
-      URL url = new URL(configURL);
-
-      // Use try-with-resources to ensure response is closed
-      try (CloseableHttpResponse response = executeHttpRequest(httpClient, url)) {
-        httpStatusCode = response.getStatusLine().getStatusCode();
-        LOG.debug("Response HTTP Status code: {}", httpStatusCode);
-        httpResponseBody = new HttpResponse(response).getBody();
-      }
+    try (CloseableHttpClient httpClient = createHttpClient(configURL);
+         CloseableHttpResponse response = executeHttpRequest(httpClient, new URL(configURL))) {
+      httpStatusCode = response.getStatusLine().getStatusCode();
+      LOG.debug("Response HTTP Status code: {}", httpStatusCode);
+      httpResponseBody = new HttpResponse(response).getBody();
 
       RetryableErrorHandling errorHandlingStrategy = httpErrorHandler.getErrorHandlingStrategy(httpStatusCode);
       boolean shouldRetry = errorHandlingStrategy.shouldRetry();
