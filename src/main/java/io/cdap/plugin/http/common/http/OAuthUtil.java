@@ -23,11 +23,14 @@ import com.google.gson.JsonElement;
 import io.cdap.plugin.http.common.BaseHttpConfig;
 import io.cdap.plugin.http.common.pagination.page.JSONUtil;
 import io.cdap.plugin.http.source.common.BaseHttpSourceConfig;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicHeader;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 
 import java.io.ByteArrayInputStream;
@@ -38,7 +41,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -70,10 +76,77 @@ public class OAuthUtil {
         return OAuthUtil.getAccessTokenByServiceAccount(config);
       case OAUTH2:
         try (CloseableHttpClient client = HttpClients.createDefault()) {
-          return OAuthUtil.getAccessTokenByRefreshToken(client, config);
+          return getAccessToken(client, (BaseHttpSourceConfig) config);
         }
     }
     return null;
+  }
+
+  public static AccessToken getAccessToken(CloseableHttpClient httpclient,
+      BaseHttpSourceConfig config)
+      throws IOException {
+    switch (config.getOauth2GrantType()) {
+      case REFRESH_TOKEN:
+        return getAccessTokenByRefreshToken(httpclient, config);
+      case CLIENT_CREDENTIALS:
+        return getAccessTokenByClientCredentials(httpclient, config.getTokenUrl(),
+            config.getClientId(), config.getClientSecret(), config.getScopes(),
+            config.getOauth2ClientAuthentication().getValue());
+      default:
+        throw new IOException("Invalid Grant Type. Cannot retrieve access token.");
+    }
+  }
+
+  private static AccessToken getAccessTokenByClientCredentials(CloseableHttpClient httpclient,
+      String tokenUrl,
+      String clientId, String clientSecret, String scope, String clientAuthentication)
+      throws IOException {
+    URI uri;
+    try {
+      uri = new URIBuilder(tokenUrl)
+          .build();
+    } catch (URISyntaxException e) {
+      throw new IllegalArgumentException(
+          "Failed to build access token URI for OAuth2 with grant type = " +
+              OAuthGrantType.CLIENT_CREDENTIALS.getValue(), e);
+    } catch (NullPointerException e) {
+      throw new IllegalArgumentException(
+          "One or more required OAuth2 parameters (Client ID, Client Secret, "
+              + "or Token URL) are missing.", e);
+    }
+
+    HttpPost httppost = new HttpPost(uri);
+    List<BasicNameValuePair> nameValuePairs = new ArrayList<>();
+    nameValuePairs.add(new BasicNameValuePair("scope", scope));
+    nameValuePairs.add(
+        new BasicNameValuePair("grant_type", OAuthGrantType.CLIENT_CREDENTIALS.getValue()));
+    nameValuePairs.add(new BasicNameValuePair("client_authentication", clientAuthentication));
+
+    httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+
+    String authorizationKey =
+        "Basic " + Base64.getEncoder().encodeToString((clientId + ":" + clientSecret).getBytes());
+
+    httppost.addHeader(new BasicHeader("Authorization", authorizationKey));
+
+    CloseableHttpResponse response = httpclient.execute(httppost);
+    String responseString = EntityUtils.toString(response.getEntity(), "UTF-8");
+
+    JsonElement accessTokenElement = JSONUtil.toJsonObject(responseString).get("access_token");
+
+    if (accessTokenElement == null) {
+      throw new IllegalArgumentException("Access token not found");
+    }
+
+    JsonElement expiresInElement = JSONUtil.toJsonObject(responseString).get("expires_in");
+    Date expiresInDate = null;
+    if (expiresInElement != null) {
+      long expiresAtMilliseconds = System.currentTimeMillis()
+          + (long) (expiresInElement.getAsInt() * 1000) - 60000L;
+      expiresInDate = new Date(expiresAtMilliseconds);
+    }
+
+    return new AccessToken(accessTokenElement.getAsString(), expiresInDate);
   }
 
   /**
@@ -117,6 +190,10 @@ public class OAuthUtil {
               .build();
     } catch (URISyntaxException e) {
       throw new IllegalArgumentException("Failed to build token URI for OAuth2", e);
+    } catch (NullPointerException e) {
+      throw new IllegalArgumentException(
+          "One or more required OAuth2 parameters (Auth URL, Token URL, Client ID, Client Secret, "
+              + "or Refresh Token) are missing.", e);
     }
 
     HttpPost httppost = new HttpPost(uri);

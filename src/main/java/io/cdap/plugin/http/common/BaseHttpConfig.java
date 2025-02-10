@@ -25,8 +25,11 @@ import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.cdap.etl.api.validation.InvalidConfigPropertyException;
 import io.cdap.plugin.common.ReferencePluginConfig;
 import io.cdap.plugin.http.common.http.AuthType;
+import io.cdap.plugin.http.common.http.OAuthClientAuthentication;
+import io.cdap.plugin.http.common.http.OAuthGrantType;
 import io.cdap.plugin.http.common.http.OAuthUtil;
 
+import io.cdap.plugin.http.source.common.BaseHttpSourceConfig;
 import java.io.File;
 import java.util.Optional;
 import javax.annotation.Nullable;
@@ -41,6 +44,8 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
     public static final String PROPERTY_OAUTH2_ENABLED = "oauth2Enabled";
     public static final String PROPERTY_AUTH_URL = "authUrl";
     public static final String PROPERTY_TOKEN_URL = "tokenUrl";
+    public static final String PROPERTY_OAUTH2_GRANT_TYPE = "oauth2GrantType";
+    public static final String PROPERTY_OAUTH2_CLIENT_AUTHENTICATION = "oauth2ClientAuthentication";
     public static final String PROPERTY_CLIENT_ID = "clientId";
     public static final String PROPERTY_CLIENT_SECRET = "clientSecret";
     public static final String PROPERTY_SCOPES = "scopes";
@@ -82,7 +87,7 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
             "OAuth2, Service account, Basic Authentication types are available.")
     protected String authType;
 
-    @Name(PROPERTY_OAUTH2_ENABLED)
+  @Name(PROPERTY_OAUTH2_ENABLED)
     @Description("If true, plugin will perform OAuth2 authentication.")
     @Nullable
     protected String oauth2Enabled;
@@ -92,6 +97,18 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
     @Description("Endpoint for the authorization server used to retrieve the authorization code.")
     @Macro
     protected String authUrl;
+
+    @Nullable
+    @Name(PROPERTY_OAUTH2_GRANT_TYPE)
+    @Description("Which Oauth2 grant type flow is used.")
+    @Macro
+    protected String oauth2GrantType;
+
+    @Nullable
+    @Name(PROPERTY_OAUTH2_CLIENT_AUTHENTICATION)
+    @Description("Which Oauth2 client authentication flow is used.")
+    @Macro
+    protected String oauth2ClientAuthentication;
 
     @Nullable
     @Name(PROPERTY_TOKEN_URL)
@@ -210,8 +227,21 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
 
     @Nullable
     public String getAuthUrl() {
-        return authUrl;
+      return authUrl;
     }
+
+  public OAuthGrantType getOauth2GrantType() {
+    OAuthGrantType grantType = OAuthGrantType.getGrantType(oauth2GrantType);
+    return BaseHttpSourceConfig.getEnumValueByString(OAuthGrantType.class, grantType.getValue(),
+        PROPERTY_OAUTH2_GRANT_TYPE);
+  }
+
+  public OAuthClientAuthentication getOauth2ClientAuthentication() {
+    OAuthClientAuthentication clientAuthentication = OAuthClientAuthentication.getClientAuthentication(
+        oauth2ClientAuthentication);
+    return BaseHttpSourceConfig.getEnumValueByString(OAuthClientAuthentication.class,
+        clientAuthentication.getValue(), PROPERTY_OAUTH2_CLIENT_AUTHENTICATION);
+  }
 
     @Nullable
     public String getTokenUrl() {
@@ -314,113 +344,138 @@ public abstract class BaseHttpConfig extends ReferencePluginConfig {
     }
 
     public boolean validateServiceAccount(FailureCollector collector) {
-        if (containsMacro(PROPERTY_NAME_SERVICE_ACCOUNT_FILE_PATH) ||
-                containsMacro(PROPERTY_NAME_SERVICE_ACCOUNT_JSON)) {
-            return false;
-        }
-        final Boolean bServiceAccountFilePath = isServiceAccountFilePath();
-        final Boolean bServiceAccountJson = isServiceAccountJson();
+      if (containsMacro(PROPERTY_NAME_SERVICE_ACCOUNT_FILE_PATH) ||
+          containsMacro(PROPERTY_NAME_SERVICE_ACCOUNT_JSON)) {
+        return false;
+      }
+      final Boolean bServiceAccountFilePath = isServiceAccountFilePath();
+      final Boolean bServiceAccountJson = isServiceAccountJson();
 
-        // we don't want the validation to fail because the VM used during the validation
-        // may be different from the VM used during runtime and may not have the Google Drive Api scope.
-        if (bServiceAccountFilePath && PROPERTY_AUTO_DETECT_VALUE.equalsIgnoreCase(serviceAccountFilePath)) {
-            return false;
-        }
+      // we don't want the validation to fail because the VM used during the validation
+      // may be different from the VM used during runtime and may not have the Google Drive Api scope.
+      if (bServiceAccountFilePath && PROPERTY_AUTO_DETECT_VALUE.equalsIgnoreCase(
+          serviceAccountFilePath)) {
+        return false;
+      }
 
-        if (bServiceAccountFilePath != null && bServiceAccountFilePath) {
-            if (!PROPERTY_AUTO_DETECT_VALUE.equals(serviceAccountFilePath) &&
-                    !new File(serviceAccountFilePath).exists()) {
-                collector.addFailure("Service Account File Path is not available.",
-                                "Please provide path to existing Service Account file.")
-                        .withConfigProperty(PROPERTY_NAME_SERVICE_ACCOUNT_FILE_PATH);
-            }
+      if (bServiceAccountFilePath != null && bServiceAccountFilePath) {
+        if (!PROPERTY_AUTO_DETECT_VALUE.equals(serviceAccountFilePath) &&
+            !new File(serviceAccountFilePath).exists()) {
+          collector.addFailure("Service Account File Path is not available.",
+                  "Please provide path to existing Service Account file.")
+              .withConfigProperty(PROPERTY_NAME_SERVICE_ACCOUNT_FILE_PATH);
         }
-        if (bServiceAccountJson != null && bServiceAccountJson) {
-            if (!Optional.ofNullable(getServiceAccountJson()).isPresent()) {
-                collector.addFailure("Service Account JSON can not be empty.",
-                                "Please provide Service Account JSON.")
-                        .withConfigProperty(PROPERTY_NAME_SERVICE_ACCOUNT_JSON);
-            }
-        }
-        return collector.getValidationFailures().size() == 0;
+      }
+      if (bServiceAccountJson != null && bServiceAccountJson) {
+        if (!Optional.ofNullable(getServiceAccountJson()).isPresent()) {
+          collector.addFailure("Service Account JSON can not be empty.",
+                "Please provide Service Account JSON.")
+            .withConfigProperty(PROPERTY_NAME_SERVICE_ACCOUNT_JSON);
+      }
+    }
+    return collector.getValidationFailures().size() == 0;
+  }
+
+  public void validate(FailureCollector failureCollector) {
+    // Validate OAuth2 properties
+    if (!containsMacro(PROPERTY_OAUTH2_ENABLED) && this.getOauth2Enabled()) {
+      String reasonOauth2 = "OAuth2 is enabled";
+      assertIsSetWithFailureCollector(getTokenUrl(), PROPERTY_TOKEN_URL, reasonOauth2,
+          failureCollector);
+      assertIsSetWithFailureCollector(getClientId(), PROPERTY_CLIENT_ID, reasonOauth2,
+          failureCollector);
+      assertIsSetWithFailureCollector(getClientSecret(), PROPERTY_CLIENT_SECRET, reasonOauth2,
+          failureCollector);
+      assertIsSetWithFailureCollector(getRefreshToken(), PROPERTY_REFRESH_TOKEN, reasonOauth2,
+          failureCollector);
     }
 
-    public void validate(FailureCollector failureCollector) {
-        // Validate OAuth2 properties
-        if (!containsMacro(PROPERTY_OAUTH2_ENABLED) && this.getOauth2Enabled()) {
-            String reasonOauth2 = "OAuth2 is enabled";
-            assertIsSetWithFailureCollector(getTokenUrl(), PROPERTY_TOKEN_URL, reasonOauth2, failureCollector);
-            assertIsSetWithFailureCollector(getClientId(), PROPERTY_CLIENT_ID, reasonOauth2, failureCollector);
-            assertIsSetWithFailureCollector(getClientSecret(), PROPERTY_CLIENT_SECRET, reasonOauth2, failureCollector);
-            assertIsSetWithFailureCollector(getRefreshToken(), PROPERTY_REFRESH_TOKEN, reasonOauth2, failureCollector);
-        }
-
-        if (!containsMacro(PROPERTY_WAIT_TIME_BETWEEN_PAGES) && waitTimeBetweenPages != null
-          && waitTimeBetweenPages < 0) {
-            failureCollector.addFailure("Wait Time Between Pages cannot be a negative number.",
-              null).withConfigProperty(PROPERTY_WAIT_TIME_BETWEEN_PAGES);
-        }
-
-        // Validate Authentication properties
-        AuthType authType = getAuthType();
-        switch (authType) {
-            case OAUTH2:
-                String reasonOauth2 = "OAuth2 is enabled";
-                if (!containsMacro(PROPERTY_TOKEN_URL)) {
-                    assertIsSetWithFailureCollector(getTokenUrl(), PROPERTY_TOKEN_URL, reasonOauth2, failureCollector);
-                }
-                if (!containsMacro(PROPERTY_CLIENT_ID)) {
-                    assertIsSetWithFailureCollector(getClientId(), PROPERTY_CLIENT_ID, reasonOauth2, failureCollector);
-                }
-                if (!containsMacro((PROPERTY_CLIENT_SECRET))) {
-                    assertIsSetWithFailureCollector(getClientSecret(), PROPERTY_CLIENT_SECRET, reasonOauth2,
-                      failureCollector);
-                }
-                if (!containsMacro(PROPERTY_REFRESH_TOKEN)) {
-                    assertIsSetWithFailureCollector(getRefreshToken(), PROPERTY_REFRESH_TOKEN, reasonOauth2,
-                      failureCollector);
-                }
-                break;
-            case SERVICE_ACCOUNT:
-                String reasonSA = "Service Account is enabled";
-                assertIsSet(getServiceAccountType(), PROPERTY_NAME_SERVICE_ACCOUNT_TYPE, reasonSA);
-                boolean propertiesAreValid = validateServiceAccount(failureCollector);
-                if (propertiesAreValid) {
-                    try {
-                        AccessToken accessToken = OAuthUtil.getAccessToken(this);
-                    } catch (Exception e) {
-                        failureCollector.addFailure("Unable to authenticate given service account info. ",
-                                        "Please make sure all infomation entered correctly")
-                                .withStacktrace(e.getStackTrace());
-                    }
-                }
-                break;
-            case BASIC_AUTH:
-                String reasonBasicAuth = "Basic Authentication is enabled";
-                if (!containsMacro(PROPERTY_USERNAME)) {
-                    assertIsSetWithFailureCollector(getUsername(), PROPERTY_USERNAME, reasonBasicAuth,
-                            failureCollector);
-                }
-                if (!containsMacro(PROPERTY_PASSWORD)) {
-                    assertIsSetWithFailureCollector(getPassword(), PROPERTY_PASSWORD, reasonBasicAuth,
-                            failureCollector);
-                }
-                break;
-        }
+    if (!containsMacro(PROPERTY_WAIT_TIME_BETWEEN_PAGES) && waitTimeBetweenPages != null
+        && waitTimeBetweenPages < 0) {
+      failureCollector.addFailure("Wait Time Between Pages cannot be a negative number.",
+          null).withConfigProperty(PROPERTY_WAIT_TIME_BETWEEN_PAGES);
     }
 
-    public static void assertIsSet(Object propertyValue, String propertyName, String reason) {
-        if (propertyValue == null) {
-            throw new InvalidConfigPropertyException(
-                    String.format("Property '%s' must be set, since %s", propertyName, reason), propertyName);
+    // Validate Authentication properties
+    AuthType authType = getAuthType();
+    switch (authType) {
+      case OAUTH2:
+        validateOAuth2Fields(failureCollector);
+        break;
+      case SERVICE_ACCOUNT:
+        String reasonSA = "Service Account is enabled";
+        assertIsSet(getServiceAccountType(), PROPERTY_NAME_SERVICE_ACCOUNT_TYPE, reasonSA);
+        boolean propertiesAreValid = validateServiceAccount(failureCollector);
+        if (propertiesAreValid) {
+          try {
+            AccessToken accessToken = OAuthUtil.getAccessToken(this);
+          } catch (Exception e) {
+            failureCollector.addFailure("Unable to authenticate given service account info. ",
+                    "Please make sure all infomation entered correctly")
+                .withStacktrace(e.getStackTrace());
+          }
         }
+        break;
+      case BASIC_AUTH:
+        String reasonBasicAuth = "Basic Authentication is enabled";
+        if (!containsMacro(PROPERTY_USERNAME)) {
+          assertIsSetWithFailureCollector(getUsername(), PROPERTY_USERNAME, reasonBasicAuth,
+              failureCollector);
+        }
+        if (!containsMacro(PROPERTY_PASSWORD)) {
+          assertIsSetWithFailureCollector(getPassword(), PROPERTY_PASSWORD, reasonBasicAuth,
+              failureCollector);
+        }
+        break;
     }
+  }
 
-    public static void assertIsSetWithFailureCollector(Object propertyValue, String propertyName, String reason,
-                                                       FailureCollector failureCollector) {
-        if (propertyValue == null) {
-            failureCollector.addFailure(String.format("Property '%s' must be set, since %s", propertyName, reason),
-              null).withConfigProperty(propertyName);
-        }
+  private void validateOAuth2Fields(FailureCollector failureCollector) {
+    String reasonOauth2GrantType = String.format("OAuth2 is enabled and grant type is %s.",
+        getOauth2GrantType().getValue());
+    if (!containsMacro(PROPERTY_TOKEN_URL)) {
+      assertIsSetWithFailureCollector(getTokenUrl(), PROPERTY_TOKEN_URL, reasonOauth2GrantType,
+          failureCollector);
     }
+    if (!containsMacro(PROPERTY_CLIENT_ID)) {
+      assertIsSetWithFailureCollector(getClientId(), PROPERTY_CLIENT_ID, reasonOauth2GrantType,
+          failureCollector);
+    }
+    if (!containsMacro(PROPERTY_CLIENT_SECRET)) {
+      assertIsSetWithFailureCollector(getClientSecret(), PROPERTY_CLIENT_SECRET,
+          reasonOauth2GrantType, failureCollector);
+    }
+    if (!containsMacro(PROPERTY_OAUTH2_CLIENT_AUTHENTICATION)) {
+      assertIsSetWithFailureCollector(getOauth2ClientAuthentication(),
+          PROPERTY_OAUTH2_CLIENT_AUTHENTICATION, reasonOauth2GrantType, failureCollector);
+    }
+    // in case of refresh token grant type, also check 2 additional fields
+    if (OAuthGrantType.REFRESH_TOKEN.equals(getOauth2GrantType())) {
+      if (!containsMacro(PROPERTY_AUTH_URL)) {
+        assertIsSetWithFailureCollector(getAuthUrl(), PROPERTY_AUTH_URL, reasonOauth2GrantType,
+            failureCollector);
+      }
+      if (!containsMacro(PROPERTY_REFRESH_TOKEN)) {
+        assertIsSetWithFailureCollector(getRefreshToken(), PROPERTY_REFRESH_TOKEN,
+            reasonOauth2GrantType, failureCollector);
+      }
+    }
+  }
+
+  public static void assertIsSet(Object propertyValue, String propertyName, String reason) {
+    if (propertyValue == null) {
+      throw new InvalidConfigPropertyException(
+          String.format("Property '%s' must be set, since %s", propertyName, reason), propertyName);
+    }
+  }
+
+  public static void assertIsSetWithFailureCollector(Object propertyValue, String propertyName,
+      String reason,
+      FailureCollector failureCollector) {
+    if (propertyValue == null) {
+      failureCollector.addFailure(
+          String.format("Property '%s' must be set, since %s", propertyName, reason),
+          null).withConfigProperty(propertyName);
+    }
+  }
 }

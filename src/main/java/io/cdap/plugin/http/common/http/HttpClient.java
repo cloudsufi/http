@@ -32,6 +32,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicHeader;
 
 import java.io.Closeable;
@@ -132,6 +133,17 @@ public class HttpClient implements Closeable {
       httpClientBuilder.setProxy(proxyHost);
     }
     httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider);
+
+    ArrayList<Header> clientHeaders = new ArrayList<>();
+
+    // oAuth2
+    if (config.getOauth2Enabled()) {
+      clientHeaders.add(new BasicHeader("Authorization",
+          "Bearer " + OAuthUtil.getAccessToken(HttpClients.createDefault(), config)
+              .getTokenValue()));
+    }
+
+    httpClientBuilder.setDefaultHeaders(clientHeaders);
 
     return httpClientBuilder.build();
   }
