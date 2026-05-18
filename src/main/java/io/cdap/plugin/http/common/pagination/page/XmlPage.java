@@ -15,23 +15,24 @@
  */
 package io.cdap.plugin.http.common.pagination.page;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
-import com.nerdforge.unxml.Parsing;
-import com.nerdforge.unxml.factory.ParsingFactory;
-import com.nerdforge.unxml.parsers.Parser;
-import com.nerdforge.unxml.parsers.builders.ObjectNodeParserBuilder;
+import com.google.gson.JsonObject;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.format.StructuredRecordStringConverter;
 import io.cdap.plugin.http.common.http.HttpResponse;
 import io.cdap.plugin.http.source.common.BaseHttpSourceConfig;
-import org.w3c.dom.Document;
+import net.sf.saxon.s9api.Processor;
+import net.sf.saxon.s9api.SaxonApiException;
+import net.sf.saxon.s9api.XPathCompiler;
+import net.sf.saxon.s9api.XdmItem;
+import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.s9api.XdmValue;
+import net.sf.saxon.trans.XPathException;
 
 import java.util.Iterator;
 import java.util.Map;
-import javax.xml.xpath.XPathConstants;
 
 /**
  * Returns sub elements which are specified by XPath, one by one.
@@ -41,15 +42,17 @@ import javax.xml.xpath.XPathConstants;
 class XmlPage extends BasePage {
   private final Map<String, String> fieldsMapping;
   private final Iterator<JsonElement> iterator;
-  private final Document document;
+  private final XdmNode document;
   private final Schema schema;
   private final BaseHttpSourceConfig config;
+
+  private final Processor processor = new Processor(false);
 
   XmlPage(BaseHttpSourceConfig config, HttpResponse httpResponse) {
     super(httpResponse);
     this.config = config;
     this.fieldsMapping = config.getFullFieldsMapping();
-    this.document = XmlUtil.createXmlDocument(httpResponse.getBody());
+    this.document = XmlUtil.createXmlDocument(processor, httpResponse.getBody());
     this.iterator = getDocumentElementsIterator();
     this.schema = config.getSchema();
   }
@@ -79,31 +82,46 @@ class XmlPage extends BasePage {
    */
   @Override
   public String getPrimitiveByPath(String path) {
-    return (String) XmlUtil.getByXPath(document, path, XPathConstants.STRING);
+    return XmlUtil.getByXPath(processor, document, path);
   }
 
   /**
-   * 1. Converts xml to a structure which is defined by "Fields Mapping" configuration. This is done using unxml.
+   * 1. Converts xml to a structure which is defined by "Fields Mapping" configuration. This is done using saxon.
    * 2. The result entity is a json array.
    * 3. An iterator for elements of json array is returned.
    *
    * @return an iterator for elements of result json array.
    */
   private Iterator<JsonElement> getDocumentElementsIterator() {
-    Parsing parsing = ParsingFactory.getInstance().create();
-    ObjectNodeParserBuilder obj = parsing.obj();
-
-    for (Map.Entry<String, String> entry : fieldsMapping.entrySet()) {
-      String schemaFieldName = entry.getKey();
-      String fieldPath = entry.getValue();
-
-      obj = obj.attribute(schemaFieldName, fieldPath, XmlUtil.xmlTextNodeParser());
+    XPathCompiler xPathCompiler = processor.newXPathCompiler();
+    JsonArray jsonArray = new JsonArray();
+    try {
+      for (XdmItem entry : xPathCompiler.evaluate(config.getResultPath(), document)) {
+        JsonObject jsonObject = new JsonObject();
+        for (String schemaFieldName : fieldsMapping.keySet()) {
+          XdmValue xdmItems = xPathCompiler.evaluate(fieldsMapping.get(schemaFieldName), entry);
+          String value = getValueFromXdmItem(xdmItems);
+          jsonObject.addProperty(schemaFieldName, value);
+        }
+        jsonArray.add(jsonObject);
+      }
+    } catch (SaxonApiException | XPathException e) {
+      throw new RuntimeException(e);
     }
-
-    Parser<ArrayNode> parser = parsing.arr(config.getResultPath(), obj).build();
-    ArrayNode node = parser.apply(document);
-    JsonArray jsonArray = JSONUtil.toJsonArray(node.toString());
     return jsonArray.iterator();
+  }
+
+  private String getValueFromXdmItem(XdmValue xdmItems) throws XPathException {
+    StringBuilder value = new StringBuilder();
+    int[] i = new int[1];
+    ((XdmNode) xdmItems).children().iterator().forEachRemaining(t -> i[0] = i[0] + 1);
+    // If main node contains child node, return full node else value of the node
+    if (i[0] > 1) {
+      value.append(xdmItems);
+    } else {
+      value.append(xdmItems.getUnderlyingValue().getStringValue());
+    }
+    return value.toString();
   }
 
   @Override

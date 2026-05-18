@@ -17,28 +17,24 @@ package io.cdap.plugin.http.common.pagination.page;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import com.google.common.base.Charsets;
 import com.nerdforge.unxml.parsers.Parser;
-import org.w3c.dom.Document;
+import net.sf.saxon.s9api.DocumentBuilder;
+import net.sf.saxon.s9api.Processor;
+import net.sf.saxon.s9api.SaxonApiException;
+import net.sf.saxon.s9api.XPathCompiler;
+import net.sf.saxon.s9api.XdmNode;
+import net.sf.saxon.trans.XPathException;
 import org.w3c.dom.Node;
-import org.xml.sax.SAXException;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.StringReader;
 import java.io.StringWriter;
-import javax.xml.namespace.QName;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathExpression;
-import javax.xml.xpath.XPathExpressionException;
+import javax.xml.transform.stream.StreamSource;
 import javax.xml.xpath.XPathFactory;
 
 /**
@@ -50,19 +46,19 @@ public class XmlUtil {
   /**
    * Create xml document instance out of a String.
    *
+   * @param processor Saxon processor with xml document configuration
    * @param xmlString xml in string format
-   * @return a Document instance representing input xml
+   * @return a XdmNode Document instance representing input xml
    */
-  public static Document createXmlDocument(String xmlString) {
-    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-    factory.setIgnoringComments(true);
-
+  public static XdmNode createXmlDocument(Processor processor, String xmlString) {
+    DocumentBuilder documentBuilder = processor.newDocumentBuilder();
+    XdmNode document = null;
     try {
-      InputStream input = new ByteArrayInputStream(xmlString.getBytes(Charsets.UTF_8));
-      return factory.newDocumentBuilder().parse(input);
-    } catch (ParserConfigurationException | SAXException | IOException e) {
-      throw new IllegalStateException("Failed to parse xml document", e);
+      document = documentBuilder.build(new StreamSource(new StringReader(xmlString)));
+    } catch (SaxonApiException e) {
+      throw new RuntimeException(e);
     }
+    return document;
   }
 
   /**
@@ -106,17 +102,17 @@ public class XmlUtil {
    * Throws an exception if element is not of given path.
    * Returns null if element not found
    *
-   * @param document document instance
+   * @param processor Saxon processor with xml document configuration
+   * @param document XdmNode document instance
    * @param path xpath string representation
-   * @param returnType a type of element expected to be returned
    * @return element found by XPath or null if not found.
    */
-  public static Object getByXPath(Document document, String path, QName returnType) {
-    XPath xpath = xPathfactory.newXPath();
+  public static String getByXPath(Processor processor, XdmNode document, String path) {
+    XPathCompiler xPathCompiler = processor.newXPathCompiler();
     try {
-      XPathExpression expr = xpath.compile(path);
-      return expr.evaluate(document, returnType);
-    } catch (XPathExpressionException e) {
+      return xPathCompiler.evaluate(path, document).getUnderlyingValue()
+        .getStringValue();
+    } catch (XPathException | SaxonApiException e) {
       return null;
     }
   }
